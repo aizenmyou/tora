@@ -57,49 +57,23 @@ toResultLine::~toResultLine()
     delete Query;
 }
 
-#if 0
-void toResultLine::start(void)
+void toResultLine::setParams(toQueryParams const& par)
 {
-    if (!Started)
-    {
-        try
-        {
-            connect(timer(), SIGNAL(timeout()), this, SLOT(refresh()));
-        }
-        TOCATCH
-        Started = true;
-    }
+    toResult::setParams(par);
 }
 
-void toResultLine::stop(void)
-{
-    if (Started)
-    {
-        try
-        {
-            disconnect(timer(), SIGNAL(timeout()), this, SLOT(refresh()));
-        }
-        TOCATCH
-        Started = false;
-    }
-}
-#endif
-
-void toResultLine::query(const QString &sql, const toQueryParams &param, bool first)
+void toResultLine::query(const QString &sql, const toQueryParams &param)
 {
     if (!handled() || Query)
         return ;
-#if 0
-    start();
-#endif
-    setSqlAndParams(sql, param);
+
+	setSqlAndParams(sql, param);
 
     try
     {
-        First = first;
         Query = new toEventQuery(this, connection(), sql, param, toEventQuery::READ_ALL);
-        connect(Query, SIGNAL(dataAvailable()), this, SLOT(poll()));
-        connect(Query, SIGNAL(done()), this, SLOT(queryDone()));
+        connect(Query, SIGNAL(dataAvailable(toEventQuery*)), this, SLOT(poll()));
+        connect(Query, SIGNAL(done(toEventQuery*, unsigned long)), this, SLOT(queryDone()));
         Query->start();
     }
     TOCATCH
@@ -126,6 +100,7 @@ void toResultLine::poll(void)
                 if (i != desc.begin())
                     labels.insert(labels.end(), (*i).Name);
             setLabels(labels);
+            First = false;
         }
 
         while (Query->hasMore())
@@ -184,7 +159,8 @@ void toResultLine::queryDone(void)
     delete Query;
     Query = NULL;
     update();
-} // queryDone
+    emit done();
+}
 
 std::list<double> toResultLine::transform(std::list<double> &input)
 {

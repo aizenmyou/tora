@@ -65,8 +65,8 @@ class toEditableMenu : public QMenu
         void remove(void);
 
     protected:
-        virtual void keyPressEvent(QKeyEvent *event);
-        virtual void contextMenuEvent(QContextMenuEvent *event);
+        void keyPressEvent(QKeyEvent *event) override;
+        void contextMenuEvent(QContextMenuEvent *event) override;
 
 };
 

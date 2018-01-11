@@ -222,7 +222,7 @@ void mysqlQuery::checkQuery(void) // Must *not* call while locked
         msg += Query->lastQuery();
         throw toConnection::exception(toQMySqlConnectionSub::ErrorString(Query->lastError(), msg));
     }
-    // NOTE: mysql_stmt_result_metadata() somethimes returns null for statements like "show create.."
+    // NOTE: mysql_stmt_result_metadata() sometimes returns null for statements like "show create.."
     // See QTBUG-4008.
     if (Query->isSelect() || Query->record().count())
     {
@@ -456,6 +456,8 @@ QStringList mysqlQuery::queryParam(const QString &in, toQueryParams &params)
 
             	break;
             }
+            default: // do nothing
+                break;
         }
         start++;
         sql.append(str);

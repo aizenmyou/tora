@@ -32,14 +32,15 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef TOSQLTEXT_H
-#define TOSQLTEXT_H
+#pragma once
 
 #include "editor/toscintilla.h"
 #include "widgets/topushbutton.h"
 #include "core/tocache.h"
 #include "loki/Singleton.h"
 #include "core/tosyntaxanalyzer.h"
+
+#include "parsing/tsqlparse.h"
 
 #include <QtCore/QString>
 #include <QtCore/QTimer>
@@ -51,6 +52,7 @@
 
 class QListWidgetItem;
 class QsciAbstractAPIs;
+class QAction;
 
 class toComplPopup;
 class toSqlTextWorker;
@@ -144,7 +146,10 @@ class toSqlText : public toScintilla
 
         toSyntaxAnalyzer* analyzer();
 
+        void indentPriv(SQLParser::Token const*, QList<SQLParser::Token const*>&);
+
     private slots:
+        void indentCurrentSql();
         void setHighlighter(int);
         void process();
         void processed();
@@ -164,6 +169,10 @@ class toSqlText : public toScintilla
         void focusInEvent(QFocusEvent *e) override;
         void focusOutEvent(QFocusEvent *e) override;
 
+        //void contextMenuEvent(QContextMenuEvent *) override;
+
+        void populateContextMenu(QMenu *) override;
+
         void scheduleParsing();
         void unScheduleParsing();
 #ifdef TORA_EXPERIMENTAL
@@ -181,6 +190,8 @@ class toSqlText : public toScintilla
         QThread *m_parserThread;
         toSqlTextWorker *m_worker;
         bool m_haveFocus; // this flag handles situation when bg thread response is rececived after focus was lost
+
+        QAction *m_wrap, *m_indent;
 };
 
 Q_DECLARE_METATYPE(toSqlText::HighlighterTypeEnum)
@@ -227,5 +238,3 @@ class toHighlighterTypeButton : public toToggleButton
 
 // this one will be usually parented by QStatusBar
 typedef Loki::SingletonHolder<toHighlighterTypeButton, Loki::CreateUsingNew, Loki::NoDestroy> toHighlighterTypeButtonSingle;
-
-#endif

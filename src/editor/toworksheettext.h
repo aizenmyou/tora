@@ -32,13 +32,15 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef TOWORKSHEETTEXT_H
-#define TOWORKSHEETTEXT_H
+#pragma once
 
+#include "core/toconfiguration.h"
 #include "core/toeditorconfiguration.h"
 #include "editor/tosqltext.h"
 
 class toComplPopup;
+class toWorksheet;
+class QFileSystemWatcher;
 
 class toWorksheetText : public toSqlText
 {
@@ -61,11 +63,32 @@ class toWorksheetText : public toSqlText
          * @param parent Parent of widget.
          * @param name Name of widget.
          */
-        toWorksheetText(QWidget *parent, const char *name = NULL);
+        toWorksheetText(toWorksheet *worksheet, QWidget *parent, const char *name = NULL);
 
         virtual ~toWorksheetText();
 
-        virtual void setHighlighter(toSqlText::HighlighterTypeEnum);
+	void setHighlighter(toSqlText::HighlighterTypeEnum) override;
+
+        // Override QScintilla (display custom toComplPopup window)
+        void autoCompleteFromAPIs() override;
+
+        /** Get filename of current file in editor.
+         * @return Filename of editor.
+         */
+        QString const& filename(void) const;
+
+        /** Open a file for editing.
+         * @param file File to open for editing.
+         */
+        void openFilename(const QString &file);
+
+        /** Set the current filename of the file in editor.
+         * @param str String containing filename.
+         */
+        void setFilename(const QString &file);
+
+        bool editOpen(const QString &suggestedFile = QString::null) override;
+        bool editSave(bool askfile) override;
 
     public slots:
         void setEditorType(int);
@@ -74,17 +97,27 @@ class toWorksheetText : public toSqlText
         void gotoPrevBookmark();
         void gotoNextBookmark();
 
-        // Override QScintilla (display custom toComplPopup window)
-        virtual void autoCompleteFromAPIs();
 
         // Insert chosen text
         void completeFromAPI(QListWidgetItem * item);
 
         void positionChanged(int row, int col);
 
+    protected slots:
+        void setCaretAlpha();
+
+        //! \brief Handle file external changes (3rd party modifications)
+        void m_fsWatcher_fileChanged(const QString & filename);
+
+    signals:
+        // emitted when a new file is opened
+        void fileOpened(void);
+        void fileOpened(QString file);
+        void fileSaved(QString file);
+
     protected:
         /*! \brief Override QScintilla event handler to display code completion popup */
-        virtual void keyPressEvent(QKeyEvent * e);
+        void keyPressEvent(QKeyEvent * e) override;
 
         /*! \brief Guess what should be used for code completion
         in this time.
@@ -98,8 +131,10 @@ class toWorksheetText : public toSqlText
 
         void completeWithText(QString const&);
 
-        virtual void focusInEvent(QFocusEvent *e);
-        virtual void focusOutEvent(QFocusEvent *e);
+        void focusInEvent(QFocusEvent *e) override;
+        void focusOutEvent(QFocusEvent *e) override;
+
+        void fsWatcherClear();
 
 #ifdef TORA3_SESSION
         /** Export data to a map.
@@ -119,8 +154,14 @@ class toWorksheetText : public toSqlText
         toComplPopup* popup;
 
     protected:
+        toWorksheet *m_worksteet; // parent Workseet tool
         QsciAbstractAPIs* m_complAPI;
-        QTimer* complTimer;
+        QTimer* m_complTimer;
+
+        QString m_filename;
+
+        //! Watch for file (if any) changes from external apps
+        QFileSystemWatcher* m_fsWatcher;
 
         //! \brief A handler for current line highlighting - margin
         // FIXME: disabled due repainting issues
@@ -132,7 +173,10 @@ class toWorksheetText : public toSqlText
         //! \brief Bookrmarks handler list used for navigation (next/prev)
         QList<int> m_bookmarks;
 
-        bool m_completeEnabled;
+        bool m_completeEnabled, m_completeDelayed;
+
+        OptionObserver<ToConfiguration::Editor::CaretLineBool> m_caretVisible;
+        OptionObserver<ToConfiguration::Editor::CaretLineAlphaInt> m_caretAlpha;
 };
 
 /**
@@ -148,5 +192,3 @@ class toEditorTypeButton : public toToggleButton
 
 // this one will be usually parented by QStatusBar
 typedef Loki::SingletonHolder<toEditorTypeButton, Loki::CreateUsingNew, Loki::NoDestroy> toEditorTypeButtonSingle;
-
-#endif

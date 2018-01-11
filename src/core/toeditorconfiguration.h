@@ -52,13 +52,15 @@ namespace ToConfiguration
             {
                 SyntaxHighlightingInt  = 3000 // #define CONF_HIGHLIGHT
                 , EditorTypeInt         // #define CONF_EDITOR_TYPE
+                , CaretLineBool
+                , CaretLineAlphaInt
                 , UseMaxTextWidthMarkBool
                 , MaxTextWidthMarkInt
                 , KeywordUpperBool      // #define CONF_KEYWORD_UPPER
                 , ObjectNamesUpperBool  // #define CONF_OBJECT_NAMES_UPPER
                 , CodeCompleteBool      // #define CONF_CODE_COMPLETION
                 , CompleteSortBool      // #define CONF_COMPLETION_SORT
-				, CodeCompleteDelayInt
+                , CodeCompleteDelayInt
                 , UseEditorShortcutsBool
                 , EditorShortcutsMap
                 , AutoIndentBool        // #define CONF_AUTO_INDENT

@@ -36,7 +36,7 @@
 #define __TOPROVIDEROBSERVER_H__
 
 #include "core/toeventquery.h"
-#include "result/totablemodel.h"
+#include "core/totablemodel.h"
 
 #include <QtCore/QObject>
 
@@ -55,12 +55,15 @@ class toEventQueryObserverObject : public QObject, toEventQuery::Client
                 virtual void observeDone() {};
                 virtual void observeEndData() {};
                 virtual void observeError(const toConnection::exception &) {};
+                virtual void observeConnectionChanged(toConnection &) {};
         };
 
         toEventQueryObserverObject(Observer &, QObject *parent = 0);
         ~toEventQueryObserverObject();
 
         void setQuery(toEventQuery *query);
+
+        toEventQuery *query();
 
 //	template<class Traits>
 //	void setModel(typename Traits::Model *model);
@@ -97,6 +100,10 @@ class toEventQueryObserverObject : public QObject, toEventQuery::Client
          */
         virtual void eqDone(toEventQuery*);
         ///@}
+
+        // "stolen from to toResult
+        virtual void connectionChanged(toConnection&);
+
     protected:
         // toTableModelPriv::RowList m_rows;
     private:

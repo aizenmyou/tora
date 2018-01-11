@@ -245,6 +245,15 @@ namespace SQLParser
         return token_const_iterator(_mEnd);
     };
 
+    Statement::token_const_iterator Statement::subtree_end(Token const*root) const
+    {
+        Token const*t = root;
+        while (!t->isLeaf())
+        {
+            t = t->child( t->childCount() - 1 );
+        }
+        return token_const_iterator(t);
+    };
 
     void Statement::token_const_iterator_to_root::increment()
     {
@@ -268,6 +277,29 @@ namespace SQLParser
         return this->m_token == other.m_token;
     };
 };
+
+QString SQLParser::TokenTable::tableName() const
+{
+    Token const *rightest = this;
+    while (!rightest->isLeaf())
+    {
+        rightest = rightest->child( rightest->childCount() - 1 );
+    }
+    QStringList tokens;
+
+    SQLParser::Statement::token_const_iterator root(this);
+    SQLParser::Statement::token_const_iterator root_end(rightest);
+    if (root != root_end)
+        do {
+            root++;
+            QString txt = root->toString();
+            if (!txt.isEmpty())
+                tokens.append(txt);
+        } while (root != root_end);
+    if (tokens.empty())
+        return QString();
+    return tokens.last();
+}
 
 #ifdef DEBUG
 #include <iostream>

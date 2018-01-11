@@ -32,12 +32,12 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef TOWORKSHEET_H
-#define TOWORKSHEET_H
+#pragma once
 
 #include "core/toconnection.h"
 #include "core/toconfenum.h"
 #include "core/tosettingtab.h"
+#include "core/tocontextmenu.h"
 #include "widgets/totoolwidget.h"
 #include "ui_toworksheetsetupui.h"
 
@@ -57,6 +57,7 @@ class QLabel;
 class QSplitter;
 class QMdiSubWindow;
 
+class toWorksheetText;
 class toWorksheetEditor;
 class toHighlightedEditor;
 class toListView;
@@ -101,7 +102,7 @@ namespace ToConfiguration
     };
 };
 
-class toWorksheet : public toToolWidget
+class toWorksheet : public toToolWidget, public toContextMenuHandler
 {
         Q_OBJECT;
     public:
@@ -112,7 +113,7 @@ class toWorksheet : public toToolWidget
 
         bool hasTransaction() const override;
 
-        toWorksheetEditor *editor(void);
+        toWorksheetText *editor(void);
 
         bool canHandle(const toConnection &) override;
 
@@ -189,17 +190,14 @@ class toWorksheet : public toToolWidget
         void slotLockConnection(bool);
         void slotRefreshModel(toResultModel*);
 
-        /**
-         * create context menus
-         */
-        void slotCreatePopupMenu(const QPoint &pos);
-
     protected:
         void closeEvent(QCloseEvent *event) override;
 
         void focusInEvent(QFocusEvent *e) override;
         void focusOutEvent(QFocusEvent *e) override;
 
+        // Overridden from toContextMenuHandler
+        void handle(QObject *obj, QMenu *menu) override;
     private slots:
         void slotPoll(void);
         void slotChangeConnection(void);
@@ -241,7 +239,7 @@ class toWorksheet : public toToolWidget
         void unlockConnection();
         bool checkUnlockConnection();
 
-        toWorksheetEditor *Editor;
+        toWorksheetText   *Editor;
         toTabWidget       *ResultTab;
         toResultTableView *Result;
         toResultPlanExplain *Plan;
@@ -282,7 +280,7 @@ class toWorksheet : public toToolWidget
         std::map<int, QWidget *> History;
         int LastID;
 
-        QMenu *ToolMenu, *context;
+        QMenu *ToolMenu;
 
         QAction *parseAct, *lockConnectionAct, *executeAct, *executeStepAct,
                 *executeAllAct,
@@ -311,4 +309,3 @@ class toWorksheetSetting
         void slotChooseFile(void);
 };
 
-#endif

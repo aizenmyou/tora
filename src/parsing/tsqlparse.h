@@ -1,10 +1,12 @@
 #pragma once
 
+#if _MSC_VER
 #pragma warning(push)
 // some warnings still occur at this level
 // if necessary, disable specific warnings not covered by previous pragma
 #pragma warning(disable:4800)
 #pragma warning(disable:4251)
+#endif
 
 #include "loki/Factory_alt.h"
 #include "core/tora_export.h"
@@ -121,6 +123,10 @@ namespace SQLParser
             {
                 return QString("[%1,%2]").arg(_mLine).arg(_mLinePos);
             };
+            inline bool isValid() const
+            {
+                return _mLine != 0;
+            }
             inline bool operator== (const Position &other) const
             {
                 return _mLine == other._mLine && _mLinePos == other._mLinePos;
@@ -196,7 +202,7 @@ namespace SQLParser
                 X_ROOT,
                 X_FAILURE,
                 X_COMMENT,
-				X_EOF,
+                X_EOF,
                 // Leaf node
                 L_RESERVED,
                 L_TABLENAME,
@@ -247,21 +253,23 @@ namespace SQLParser
                 : _mParent(parent)
                 , _mPosition(pos)
                 , _mStr(str)
-                , _mTokenType(tokentype) // will be overwriten by descendent
+                , _mTokenType(tokentype) // will be overwritten by descendant
                 , _mUsageType(Unknown)
-                //, _mAlias(NULL)
+                , _mDepth(parent ? parent->_mDepth + 1 : 0)
             {};
 
             Token(const Token& other)
                 : _mParent(other._mParent)
                 , _mPosition(other._mPosition)
                 , _mStr(other._mStr)
-                , _mTokenType(other._mTokenType) // will be overwriten by descendent
+                , _mTokenType(other._mTokenType) // will be overwritten by descendant
                 , _mUsageType(other._mUsageType)
                 , _mTokenATypeName(other._mTokenATypeName)
                 , _mChildren(other._mChildren)
                 , _mSpacesPrev(other._mSpacesPrev)
                 , _mSpacesPost(other._mSpacesPost)
+                , _mMetadata(other._mMetadata)
+                , _mDepth(other._mDepth)
             {
                 //size_t me = this->size();
                 //size_t oth = other.size();
@@ -284,6 +292,21 @@ namespace SQLParser
                 return getPosition();
             };
 
+            //Some tokens do not have its position, in this case return position of the leftest leaf
+            const Position& getValidPosition() const
+            {
+                Token const *root = this;
+                while (!root->getPosition().isValid())
+                {
+                    auto children = root->getChildren();
+                    if (children.empty())
+                        break;
+                    else
+                        root = children.at(0);
+                }
+                return root->getPosition();
+            }
+
             const QString& toString() const
             {
                 static const QString Empty;
@@ -301,10 +324,10 @@ namespace SQLParser
             QString toStringFull() const
             {
                 QString retval;
-		foreach(QPointer<Token> space, _mSpacesPrev)
-		{
-			retval += space->toString();
-		}
+                foreach(QPointer<Token> space, _mSpacesPrev)
+                {
+                    retval += space->toString();
+                }
                 retval += this->toString();
                 foreach(QPointer<Token> space, _mSpacesPost)
                 {
@@ -312,34 +335,39 @@ namespace SQLParser
                 }
                 return retval;
             };
+
             QString toStringRecursive(bool spaces = true) const
             {
-		    //QString retval(spaces ? toStringFull() : toString());
-		    QString retval, retval_pre, retval_post;
-		    //retval_pre += '[';
-		    retval += (spaces ? toStringFull() : toString());
-		    //retval += getPosition().toString();
-		    foreach(QPointer<Token> child, _mChildren)
-		    {
-			    Position child_position(0,0);
-			    Token *c = child;
-			    do
-			    {
-				    child_position = c->getPosition();
-				    auto children = c->getChildren();
-				    if (children.empty())
-					    break;
-				    else
-					    c = children.at(0);
-			    } while(c && child_position == Position(0,0)); 
+                QString retval(spaces ? toStringFull() : toString());
+                QString retval_pre, retval_post;
+                //retval_pre += '[';
+                //retval += getPosition().toString();
+                foreach(QPointer<Token> child, _mChildren)
+                {
+                    Position child_position = child->getValidPosition();
 
-			    if(child_position < this->getPosition())
-				    retval_pre += child->toStringRecursive(spaces);
-			    else
-				    retval_post += child->toStringRecursive(spaces);
-		    }
-		    //retval_post += ']';
-		    return retval_pre + retval + retval_post;
+                    if(child_position < this->getPosition())
+                        retval_pre += child->toStringRecursive(spaces);
+                    else
+                        retval_post += child->toStringRecursive(spaces);
+                }
+                //retval_post += ']';
+                return retval_pre + retval + retval_post;
+            };
+
+            QString toLispStringRecursive() const
+            {
+                QString retval;
+                retval += "(";
+                retval += _mStr + "/" + getTokenATypeName() + "[" + getTokenTypeString() + "]";
+                foreach(QPointer<Token> child, _mChildren)
+                {
+                    retval += "(";
+                    retval += child->toLispStringRecursive();
+                    retval += ")";
+                }
+                retval += ")";
+                return retval;
             };
 
             inline bool isLeaf() const
@@ -370,18 +398,23 @@ namespace SQLParser
                 return _mUsageType;
             };
 
+            inline unsigned depth() const
+            {
+                return _mDepth;
+            }
+
             inline void appendChild(QPointer<Token> child)
             {
                 _mChildren.append(child);
             };
-			inline void prependSpacer(QPointer<Token> space)
-			{
-				_mSpacesPrev.append(space);
-			};
-            inline void appendSpacer(QPointer<Token> space)
+            inline void addSpacer(QPointer<Token> space)
             {
-                _mSpacesPost.append(space);
+                if (space->getPosition() < getPosition())
+                    _mSpacesPrev.append(space);
+                else
+                    _mSpacesPost.append(space);
             };
+
             inline void replaceChild(int index, Token* newOne)
             {
                 _mChildren.replace(index, newOne);
@@ -395,6 +428,18 @@ namespace SQLParser
             {
                 return _mChildren;
             };
+
+            inline QList<QPointer<Token> > const& prevTokens() const
+            {
+                return _mSpacesPrev;
+            }
+
+            inline QList<QPointer<Token> > const& postTokens() const
+            {
+                return _mSpacesPost;
+            }
+
+	    inline QMap<QString, QVariant>& metadata() const { return _mMetadata; }
 
             //inline Translation& aliasTranslation() { return _mAliasTranslation; };
             //inline Translation const& aliasTranslation() const { return _mAliasTranslation; };
@@ -417,7 +462,8 @@ namespace SQLParser
             // TODO use only one of them
             QList<QPointer<Token> > _mChildren;
             QList<QPointer<Token> > _mSpacesPrev, _mSpacesPost;
-
+            mutable QMap<QString, QVariant> _mMetadata;
+            unsigned _mDepth;
     };
 
     class TORA_EXPORT TokenIdentifier: public Token
@@ -476,7 +522,6 @@ namespace SQLParser
             };
 
             QString tableName () const;
-            QString columnName () const;
 
             inline Token const* nodeAlias() const
             {
@@ -632,7 +677,7 @@ namespace SQLParser
             /* Call this method after the instance is created.
                 It will use ObjectCache to disambiguate column names.
             */
-            virtual void scanTree(ObjectCache *, QString const&) = 0;
+            virtual void scanTree() = 0;
 
             virtual ~Statement() {};
 
@@ -650,7 +695,11 @@ namespace SQLParser
             //};
 
             const QVector<const Token*>& tableTokens() const;
-            ;
+
+            inline const QList<Token*> allLeaves() const
+            {
+                return _mLeaves;
+            }
 
             //inline const QSet<QString>& aliases() const
             //{
@@ -686,9 +735,15 @@ namespace SQLParser
                     token_const_iterator() : m_token(0), m_stack(), m_lastIndex(0)
                     {};
 
-                    explicit token_const_iterator(Token* p) : m_token(p), m_stack(), m_lastIndex(0)
+                    explicit token_const_iterator(Token const* t) : m_token(t), m_stack(), m_lastIndex(0)
                     {
-                        m_stack.push_back(p);
+                        Token const*p = t->parent();
+                        m_stack.push_front(t);
+                        while (p)
+                        {
+                            m_stack.push_front(p);
+                            p = p->parent();
+                        }
                     };
 
                     token_const_iterator(token_const_iterator const& other)
@@ -725,6 +780,8 @@ namespace SQLParser
             token_const_iterator begin() const;
 
             token_const_iterator end() const;
+
+            token_const_iterator subtree_end(Token const*) const;
 
             class token_const_iterator_to_root : public boost::iterator_facade
                 <
@@ -796,6 +853,7 @@ namespace SQLParser
                     Token* m_token;
             }; // class token_const_iterator_to_root
 
+            QString dot;
         protected:
             QString _mStatement, _mname;
             QMap<Position, Position*> _mPosition2pToken;
@@ -807,7 +865,7 @@ namespace SQLParser
             //QSet<QString> _mTablesSet, _mAliasesSet;
             QVector<Token const*> _mTablesList;
             QMap<QString, const Token*> _mDeclarations;
-        public:
+            QList<Token*> _mLeaves;
     };
 
     inline const QVector<const Token*>& Statement //: public QObject
@@ -821,5 +879,7 @@ namespace SQLParser
 typedef TORA_EXPORT Util::GenericFactory<SQLParser::Statement, LOKI_TYPELIST_2(const QString &, const QString&)> StatementFactTwoParm;
 class TORA_EXPORT StatementFactTwoParmSing: public ::Loki::SingletonHolder<StatementFactTwoParm> {};
 
+#if _MSC_VER
 // restore warning level
 #pragma warning(pop)
+#endif

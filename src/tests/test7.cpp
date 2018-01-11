@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 	
 	try
 	{
-		auto_ptr <SQLParser::Statement> parser = StatementFactTwoParmSing::Instance().create("OracleDML", qsql, "");
+		unique_ptr<SQLParser::Statement> parser = StatementFactTwoParmSing::Instance().create("OracleDML", qsql, "");
 		parser->dumpTree();
 		toASTWalk(*parser, [](Token const&node)
 			  {
@@ -153,7 +153,7 @@ int main(int argc, char **argv)
 		o->addTable(SQLParser::ObjectCache::TableInfo(QString("SERVICEDESK"), QString("ITSM_CODES"), cols));
 		cols.clear();
 
-		parser->scanTree(o, QString("SERVICEDESK"));
+		parser->scanTree(/*o, QString("SERVICEDESK")*/);
 
 		unslurp(string(argv[1]) + ".out", deserialized);
 	}

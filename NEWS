@@ -1,3 +1,24 @@
+3.2.76:
+2017-10-24: Fix explain plan for
+
+3.2.73:
+2017-10-19: Fix display preferences
+2017-10-19: Fix Scroll top explain plan when fetched
+
+3.2.70:
+2017-10-17: Query graph fixes
+
+3.2.44:
+2017-08-29: toBrowser, show stats history
+2017-08-09: toAbout fixes, repoert new version 
+2017-08-09: Context menu fixes - Open, Save, Paste
+
+3.2.0:
+2017-07-04: Query model, fixes
+
+3.1.0:
+2017-01-06: Various fixes
+
 3.0.0:
 2016-04-03: New major release
 

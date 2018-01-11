@@ -39,10 +39,10 @@
 #include "core/toconnection.h"
 #include "widgets/toresultitem.h"
 #include "core/tosql.h"
-#include "editor/tohighlightededitor.h"
 #include "editor/tosqltext.h"
 
 #include <QComboBox>
+#include <QLabel>
 #include <QtGui/QPixmap>
 #include <QVBoxLayout>
 #include <QSpinBox>
@@ -470,8 +470,7 @@ toProfiler::toProfiler(QWidget *parent, toConnection &connection)
 
     toolbar->addSeparator();
 
-    toolbar->addWidget(
-        new QLabel(tr("Repeat run") + " ", toolbar));
+    toolbar->addWidget(new QLabel(tr("Repeat run") + " ", toolbar));
 
     Repeat = new QSpinBox(toolbar);
     Repeat->setValue(5);
@@ -510,7 +509,7 @@ toProfiler::toProfiler(QWidget *parent, toConnection &connection)
     Tabs = new QTabWidget(this);
     layout()->addWidget(Tabs);
 
-    Script = new toHighlightedEditor(Tabs);
+    Script = new toSqlText(Tabs);
     Tabs->addTab(Script, tr("Script"));
 
     Result = new QSplitter(Tabs);
@@ -618,7 +617,7 @@ void toProfiler::execute(void)
         exc = toSQL::string(SQLStartProfiler, connection());
         for (int i = 0; i < Repeat->value(); i++)
         {
-            exc += Script->editor()->text();
+            exc += Script->text();
             exc += QString::fromLatin1("\n");
         }
         exc += toSQL::string(SQLStopProfiler, connection());

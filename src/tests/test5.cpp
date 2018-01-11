@@ -44,7 +44,7 @@
 #include "core/utils.h"
 #include "core/toconfiguration.h"
 #include "core/toglobalconfiguration.h"
-#include "widgets/toupdater.h"
+#include "core/toupdater.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QLibrary>
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 {
     int p = 0;
 
-    toConfigurationNew::setQSettingsEnv();
+    toConfiguration::setQSettingsEnv();
 
     QApplication app(argc, argv);
 

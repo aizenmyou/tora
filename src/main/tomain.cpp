@@ -33,8 +33,10 @@
  * END_COMMON_COPYRIGHT_HEADER */
 
 #include "main/tomain.h"
+#include "main/topreferences.h"
 #include "widgets/tobackgroundlabel.h"
 #include "core/toeditmenu.h"
+#include "core/tofilemenu.h"
 #include "widgets/toworkspace.h"
 #include "core/toraversion.h"
 #include "core/toconnectionprovider.h"
@@ -44,7 +46,6 @@
 #include "editor/tomemoeditor.h"
 #include "widgets/toabout.h"
 #include "tools/toworksheet.h"
-#include "tools/toworksheeteditor.h"
 #include "tools/tobrowser.h"
 #include "core/toconfiguration.h"
 #include "core/toglobalevent.h"
@@ -52,21 +53,14 @@
 #include "core/utils.h"
 #include "core/tologger.h"
 #include "core/toconf.h"
+#include "core/toupdater.h"
 #include "ts_log/toostream.h"
 #include "editor/tosqltext.h"
 #include "editor/toworksheettext.h"
+#include "widgets/tosearch.h"
 
-#include "icons/connect.xpm"
-#include "icons/disconnect.xpm"
-#include "icons/fileopen.xpm"
-#include "icons/filesave.xpm"
-#include "icons/print.xpm"
 #include "icons/tora.xpm"
 #include "icons/up.xpm"
-#include "icons/commit.xpm"
-#include "icons/rollback.xpm"
-#include "icons/stop.xpm"
-#include "icons/refresh.xpm"
 
 #include <QComboBox>
 #include <QStatusBar>
@@ -74,14 +68,13 @@
 #include "widgets/tohelp.h"
 #include "tomessage.h"
 #include "tonewconnection.h"
-#include "topreferences.h"
-
 
 toMain::toMain()
     : toMainWindow()
     , Workspace(toWorkSpaceSingle::Instance())
     , Connections(toConnectionRegistrySing::Instance())
-    , editMenu(toEditMenuSingle::Instance())
+    , fileMenu(toFileMenuSingle::Instance())
+    , editMenu(toEditMenuSingle::Instance())      
     , Poll()
     , BackgroundLabel(new toBackgroundLabel(statusBar()))
     , loggingWidget(toLoggingWidgetSingle::Instance())
@@ -110,8 +103,6 @@ toMain::toMain()
 
     createDocklets();
 
-    updateRecent();
-
     setWindowTitle(TOAPPNAME " " TORAVERSION);
     setWindowIcon(QPixmap(const_cast<const char**>(tora_xpm)));
 
@@ -136,16 +127,12 @@ toMain::toMain()
     connect(&Poll, SIGNAL(timeout()), this, SLOT(checkCaching()));
 
     // Connect this "main" window to global events dispatcher
-    connect(&toGlobalEventSingle::Instance(), SIGNAL(s_addRecentFile(QString const&)),
-            this, SLOT(addRecentFile(QString const&)));
     connect(&toGlobalEventSingle::Instance(), SIGNAL(s_addCustomMenu(QMenu*)),
             this, SLOT(addCustomMenu(QMenu*)));
     connect(&toGlobalEventSingle::Instance(), SIGNAL(s_setCoordinates(int,int)),
             this, SLOT(setCoordinates(int, int)));
     connect(&toGlobalEventSingle::Instance(), SIGNAL(s_createDefaultTool(void)),
             this, SLOT(createDefault()));
-    connect(&toGlobalEventSingle::Instance(), SIGNAL(s_addConnection(toConnection*, bool)),
-            this, SLOT(addConnection(toConnection *conn, bool)));
     connect(&toGlobalEventSingle::Instance(), SIGNAL(s_setNeedCommit(toToolWidget*, bool)),
             this, SLOT(setNeedCommit(toToolWidget*, bool)));
     connect(&toGlobalEventSingle::Instance(), SIGNAL(s_checkCaching()),
@@ -154,6 +141,8 @@ toMain::toMain()
             this, SLOT(showMessageImpl(QString, bool, bool)), Qt::QueuedConnection);
     connect(&toGlobalEventSingle::Instance(), SIGNAL(s_editOpenFile(QString const&)),
             this, SLOT(editOpenFile(QString const&)));
+    connect(&toGlobalEventSingle::Instance(), SIGNAL(s_openPreferences()),
+            this, SLOT(openPreferences()));
     connect(&toWorkSpaceSingle::Instance(), SIGNAL(activeToolChaged(toToolWidget*)),
             this, SLOT(slotActiveToolChaged(toToolWidget*)));
 
@@ -185,113 +174,22 @@ toMain::toMain()
     toProvidersList &allProviders = toProvidersListSing::Instance(); // already populated in main.cpp see splash
     Q_UNUSED(allProviders);
 
-    if (Connections.isEmpty())
-    {
-        try
-        {
-            toConnection *conn;
-
-            do
-            {
-                toNewConnection newConnection(this);
-
-                conn = NULL;
-                if (newConnection.exec())
-                    conn = newConnection.connection();
-                else
-                    break;
-            }
-            while (!conn);
-
-            if (conn)
-                addConnection(conn);
-        }
-        TOCATCH;
-    }
-
 #ifdef QT_DEBUG
     reportTimer = new QTimer(this);
     reportTimer->setInterval(5000);
     connect(reportTimer, SIGNAL(timeout ()), this, SLOT(reportFocus()));
     reportTimer->start();
 #endif
+
+    if (Connections.isEmpty())
+    {
+        addConnection();
+    }
 }
 
 void toMain::createActions()
 {
-    newConnAct = new QAction(QPixmap(const_cast<const char**>(connect_xpm)),
-                             tr("&New Connection..."),
-                             this);
-//     newConnAct->setShortcut(Qt::CTRL + Qt::Key_G);
-    newConnAct->setToolTip(tr("Create a new connection"));
-    connect(newConnAct, SIGNAL(triggered()), this, SLOT(addConnection()));
-
-    closeConn = new QAction(QPixmap(const_cast<const char**>(disconnect_xpm)),
-                            tr("&Close Connection"),
-                            this);
-    closeConn->setToolTip(tr("Disconnect"));
-    connect(closeConn, SIGNAL(triggered()), this, SLOT(delCurrentConnection()));
-
-    commitAct = new QAction(QPixmap(const_cast<const char**>(commit_xpm)),
-                            tr("&Commit Connection"),
-                            this);
-    commitAct->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_C);
-    commitAct->setToolTip(tr("Commit transaction"));
-    commitAct->setDisabled(true);
-
-    rollbackAct = new QAction(QPixmap(const_cast<const char**>(rollback_xpm)),
-                              tr("&Rollback Connection"),
-                              this);
-    rollbackAct->setShortcut(Qt::CTRL + Qt::Key_Less);
-    rollbackAct->setToolTip(tr("Rollback transaction"));
-    rollbackAct->setDisabled(true);
-
-    currentAct = new QAction(tr("&Current Connection"),
-                             this);
-    currentAct->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_U);
-
-    stopAct = new QAction(QPixmap(const_cast<const char**>(stop_xpm)),
-                          tr("Stop All Queries"),
-                          this);
-    stopAct->setShortcut(Qt::CTRL + Qt::Key_J);
-
-    refreshAct = new QAction(QPixmap(const_cast<const char**>(refresh_xpm)),
-                             tr("Reread Object Cache"),
-                             this);
-
-    openAct = new QAction(QPixmap(const_cast<const char**>(fileopen_xpm)),
-                          tr("&Open File..."),
-                          this);
-    openAct->setShortcut(QKeySequence::Open);
-
-    saveAct = new QAction(QPixmap(const_cast<const char**>(filesave_xpm)),
-                          tr("&Save File..."),
-                          this);
-    saveAct->setShortcut(QKeySequence::Save);
-
-    saveAsAct = new QAction(tr("Save &As..."), this);
-    saveAsAct->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_W);
-
-#ifdef TORA3_SESSION
-    openSessionAct = new QAction(QPixmap(const_cast<const char**>(fileopen_xpm)),
-                                 tr("Open Session..."),
-                                 this);
-
-    saveSessionAct = new QAction(QPixmap(const_cast<const char**>(filesave_xpm)),
-                                 tr("Save Session..."),
-                                 this);
-
-    restoreSessionAct = new QAction(tr("Restore Last Session"), this);
-
-    closeSessionAct = new QAction(tr("Close Session"), this);
-#endif
-
-    printAct = new QAction(QPixmap(const_cast<const char**>(print_xpm)),
-                           tr("&Print..."),
-                           this);
-    printAct->setShortcut(QKeySequence::Print);
-
-    quitAct = new QAction(tr("&Quit"), this);
+    // ---------------------------------------- file menu - has it's own singleton class
 
     // ---------------------------------------- edit menu - has it's own singleton class
 
@@ -309,61 +207,28 @@ void toMain::createActions()
     // ---------------------------------------- windows menu
     windowCloseAct = new QAction(tr("C&lose"), this);
     windowCloseAllAct = new QAction(tr("Close &All"), this);
+
+    toUpdaterSingle::Instance().check(/*force=>*/false);
 }
 
 
 void toMain::createMenus()
 {
-    fileMenu = menuBar()->addMenu(tr("&File"));
-    fileMenu->addAction(newConnAct);
-    fileMenu->addAction(closeConn);
-    fileMenu->addSeparator();
+    menuBar()->addMenu(&fileMenu);
+    connect(fileMenu.newConnAct, SIGNAL(triggered()), this, SLOT(addConnection()));
+    connect(fileMenu.closeConnAct, SIGNAL(triggered()), this, SLOT(delCurrentConnection()));
 
-    fileMenu->addAction(commitAct);
-    fileMenu->addAction(rollbackAct);
-    fileMenu->addAction(currentAct);
-    fileMenu->addAction(stopAct);
-    fileMenu->addAction(refreshAct);
-    fileMenu->addSeparator();
-
-    fileMenu->addAction(openAct);
-    // add recentMenu after, setup later
-    recentMenu = fileMenu->addMenu(tr("R&ecent Files"));
-    fileMenu->addMenu(recentMenu);
-
-    fileMenu->addAction(saveAct);
-    fileMenu->addAction(saveAsAct);
-    fileMenu->addSeparator();
-
-#ifdef TORA3_SESSION
-    fileMenu->addAction(openSessionAct);
-    fileMenu->addAction(saveSessionAct);
-    fileMenu->addAction(restoreSessionAct);
-    fileMenu->addAction(closeSessionAct);
-    fileMenu->addSeparator();
-#endif
-
-    fileMenu->addAction(printAct);
-    fileMenu->addSeparator();
-
-    fileMenu->addAction(quitAct);
-
-    connect(fileMenu, SIGNAL(aboutToShow()), this, SLOT(showFileMenu()));
-    connect(fileMenu,
+    connect(&fileMenu,
             SIGNAL(triggered(QAction *)),
             this,
             SLOT(commandCallback(QAction *)));
 
-    connect(recentMenu,
+    connect(fileMenu.recentMenu,
             SIGNAL(triggered(QAction *)),
             this,
             SLOT(recentCallback(QAction *)));
 
     menuBar()->addMenu(&editMenu);
-    connect(&editMenu,
-            SIGNAL(triggered(QAction *)),
-            this,
-            SLOT(commandCallback(QAction *)));
 
     // Use only when there are any docklets registered
     if (toDocklet::docklets().count())
@@ -434,9 +299,8 @@ void toMain::createToolbars()
     editToolbar = Utils::toAllocBar(this, tr("Application"));
     editToolbar->setObjectName("editToolbar");
 
-    editToolbar->addAction(openAct);
-    editToolbar->addAction(saveAct);
-    editToolbar->addAction(printAct);
+    editToolbar->addAction(fileMenu.openAct);
+    editToolbar->addAction(fileMenu.saveAct);
     editToolbar->addSeparator();
 
     editToolbar->addAction(editMenu.undoAct);
@@ -451,13 +315,13 @@ void toMain::createToolbars()
     connectionToolbar = Utils::toAllocBar(this, tr("Connections"));
     connectionToolbar->setObjectName("connectionToolbar");
 
-    connectionToolbar->addAction(newConnAct);
-    connectionToolbar->addAction(closeConn);
-    connectionToolbar->addAction(commitAct);
-    connectionToolbar->addAction(rollbackAct);
+    connectionToolbar->addAction(fileMenu.newConnAct);
+    connectionToolbar->addAction(fileMenu.closeConnAct);
+    connectionToolbar->addAction(fileMenu.commitAct);
+    connectionToolbar->addAction(fileMenu.rollbackAct);
     connectionToolbar->addSeparator();
 
-    connectionToolbar->addAction(stopAct);
+    connectionToolbar->addAction(fileMenu.stopAct);
     connectionToolbar->addSeparator();
 
     ConnectionSelection = new QComboBox(connectionToolbar);
@@ -488,11 +352,9 @@ void toMain::createStatusbar()
     SelectionLabel->setText("Sel: Normal");
 #endif
 
-    toEditorTypeButtonSingle::Instance().setFocusPolicy(Qt::NoFocus);
     toEditorTypeButtonSingle::Instance().setDisabled(true);
     statusBar()->addPermanentWidget(&toEditorTypeButtonSingle::Instance());
 
-    toHighlighterTypeButtonSingle::Instance().setFocusPolicy(Qt::NoFocus);
     toHighlighterTypeButtonSingle::Instance().setDisabled(true);
     statusBar()->addPermanentWidget(&toHighlighterTypeButtonSingle::Instance());
 
@@ -506,7 +368,6 @@ void toMain::createStatusbar()
 
     QToolButton *dispStatus = new toPopupButton(statusBar(), "dispStatus");
     dispStatus->setIcon(QPixmap(const_cast<const char**>(up_xpm)));
-    dispStatus->setFocusPolicy(Qt::NoFocus);
     statusBar()->addPermanentWidget(dispStatus, 0);
     statusMenu = new QMenu(dispStatus);
     dispStatus->setMenu(statusMenu);
@@ -566,68 +427,6 @@ void toMain::createDockbars()
 
     leftDockbar->restoreState(toConfigurationNewSingle::Instance().option(ToConfiguration::Main::LeftDockbarState).toByteArray());
     rightDockbar->restoreState(toConfigurationNewSingle::Instance().option(ToConfiguration::Main::RightDockbarState).toByteArray());
-}
-
-void toMain::showFileMenu(void)
-{
-    bool hascon = (ConnectionSelection->count() > 0);
-
-    commitAct->setEnabled(hascon);
-    stopAct->setEnabled(hascon);
-    rollbackAct->setEnabled(hascon);
-    // disable reread cache if use caching is disabled
-    refreshAct->setEnabled(hascon && toConfigurationNewSingle::Instance().option(ToConfiguration::Global::CacheDiskBool).toBool());
-    closeConn->setEnabled(hascon);
-
-    updateRecent();
-}
-
-void toMain::updateRecent()
-{
-    QStringList files(toConfigurationNewSingle::Instance().option(ToConfiguration::Main::RecentFiles).toStringList());
-    recentMenu->clear();
-
-    int index = 1;
-    QMutableListIterator<QString> i(files);
-    i.toBack();
-    QString f;
-    while (i.hasPrevious())
-    {
-        f = i.previous();
-
-        QFileInfo fi(f);
-        if (!fi.exists())
-        {
-            i.remove();
-            continue;
-        }
-
-        // store file name in tooltip. this is used later to
-        // open the file, and is handy to know what file tora
-        // is opening.
-        QString caption = fi.fileName();
-        if (index < 10)
-            caption = "&" + QString::number(index++) + "  " + caption;
-
-        QAction *r = new QAction(caption, this);
-        r->setToolTip(f);
-        recentMenu->addAction(r);
-    }
-
-    toConfigurationNewSingle::Instance().setOption(ToConfiguration::Main::RecentFiles, QVariant(files));
-}
-
-
-void toMain::addRecentFile(const QString &file)
-{
-    QStringList files(toConfigurationNewSingle::Instance().option(ToConfiguration::Main::RecentFiles).toStringList());
-    int maxnum = toConfigurationNewSingle::Instance().option(ToConfiguration::Main::RecentMax).toInt();
-
-    files.removeAll(file);
-    if (files.count() >= maxnum)
-        files.removeAt(0);
-    files.append(file);
-    toConfigurationNewSingle::Instance().setOption(ToConfiguration::Main::RecentFiles, QVariant(files));
 }
 
 void toMain::updateWindowsMenu(void)
@@ -750,16 +549,16 @@ void toMain::viewCallback(QAction *action)
 
 void toMain::moveDocklet(toDocklet *let, Qt::DockWidgetArea area)
 {
-    if (area == Qt::RightDockWidgetArea)
-    {
-        leftDockbar->removeDocklet(let);
-        rightDockbar->addDocklet(let);
-    }
-
     if (area == Qt::LeftDockWidgetArea)
     {
         rightDockbar->removeDocklet(let);
         leftDockbar->addDocklet(let);
+    }
+
+    if (area == Qt::RightDockWidgetArea)
+    {
+        leftDockbar->removeDocklet(let);
+        rightDockbar->addDocklet(let);
     }
 }
 
@@ -768,80 +567,17 @@ void toMain::commandCallback(QAction *action)
 {
     QWidget *focus = qApp->focusWidget();
 
-//    if (focus)
-//    {
-//		QString name = focus->objectName();
-//        toEditWidget *edit = toEditWidget::findEdit(focus);
-//        if (edit && edit != Edit)
-//        	toEditMenuSingle::Instance().receivedFocus(edit);
-//        else if (focus->inherits("QLineEdit") || QString(focus->metaObject()->className()) == QString("QSpinBox"))
-//        	// TODO HUH? really?
-//        	toEditMenuSingle::Instance().receivedFocus(edit);
-//    }
-
+    toEditWidget::FlagSetStruct editFlags;
     toEditWidget *edit = toEditWidget::findEdit(focus);
-    if (edit)
-    {
-        if (action == editMenu.redoAct)
-            edit->editRedo();
-        else if (action == editMenu.undoAct)
-            edit->editUndo();
-        else if (action == editMenu.copyAct)
-            edit->editCopy();
-        else if (action == editMenu.pasteAct)
-            edit->editPaste();
-        else if (action == editMenu.cutAct)
-            edit->editCut();
-        else if (action == editMenu.selectAllAct)
-            edit->editSelectAll();
-#if 0
-// TODO: this part is waiting for QScintilla backend feature (yet unimplemented).
-        else if (action == selectBlockAct)
-        {
-            // OK, this looks ugly but it's pretty functional.
-            // Here I need to setup chosen selection type for
-            // all QScintilla based editors.
-            int selectionType = action->isChecked()
-                                ? QsciScintillaBase::SC_SEL_RECTANGLE
-                                : QsciScintillaBase::SC_SEL_STREAM;
-            foreach (QWidget * i, QApplication::allWidgets())
-            {
-                toScintilla * w = qobject_cast<toScintilla*>(i);
-                if (w)
-                {
-                    w->setSelectionType(selectionType);
-                    TLOG(2, toDecorator, __HERE__) << "setting" << w << selectionType;
-                }
-            }
-            SelectionLabel->setText(action->isChecked() ? "Sel: Block" : "Sel: Normal");
-        }
-#endif
-        else if (action == editMenu.readAllAct)
-            edit->editReadAll();
-        else if (action == editMenu.searchReplaceAct)
-        {
-            edit->searchReplace();
-        }
-        else if (action == editMenu.searchNextAct)
-        {
-            edit->searchNext();
-        }
-        else if (action == saveAsAct)
-            edit->editSave(true);
-        else if (action == saveAct)
-            edit->editSave(false);
-        else if (action == printAct)
-            edit->editPrint();
-    } // if edit
 
-    if (action == openAct && !this->Connections.isEmpty())
+    if (action == fileMenu.openAct && !this->Connections.isEmpty())
     {
-        if (edit)
+        if (edit && editFlags.Open)
             edit->editOpen();
         else
             this->editOpenFile(QString::null);
     }
-    if (action == commitAct)
+    if (action == fileMenu.commitAct)
     {
         try
         {
@@ -855,7 +591,7 @@ void toMain::commandCallback(QAction *action)
         }
         TOCATCH;
     }
-    else if (action == rollbackAct)
+    else if (action == fileMenu.rollbackAct)
     {
         try
         {
@@ -865,7 +601,7 @@ void toMain::commandCallback(QAction *action)
         }
         TOCATCH;
     }
-    else if (action == stopAct)
+    else if (action == fileMenu.stopAct)
     {
         try
         {
@@ -879,7 +615,7 @@ void toMain::commandCallback(QAction *action)
         }
         TOCATCH;
     }
-    else if (action == refreshAct)
+    else if (action == fileMenu.refreshAct)
     {
         try
         {
@@ -888,9 +624,9 @@ void toMain::commandCallback(QAction *action)
         TOCATCH;
         checkCaching();
     }
-    else if (action == currentAct)
+    else if (action == fileMenu.currentAct)
         ConnectionSelection->setFocus();
-    else if (action == quitAct)
+    else if (action == fileMenu.quitAct)
         close();
     else if (action == helpCurrentAct)
         toHelp::displayHelp();
@@ -903,11 +639,6 @@ void toMain::commandCallback(QAction *action)
     }
     else if (action == aboutQtAct)
         QApplication::aboutQt();
-    else if (action == editMenu.prefsAct)
-    {
-        toPreferences::displayPreferences(this);
-        //handleToolsDisplay();
-    }
 #ifdef TORA3_SESSION
     else if (action == openSessionAct)
         loadSession();
@@ -941,26 +672,22 @@ void toMain::addConnection(void)
             conn = newConnection.connection();
 
         if (conn)
-            addConnection(conn);
+        {
+            Connections.addConnection(conn);
+            // New connection was added - create a default tool for it
+            createDefault();
+        }
     }
     TOCATCH
-}
-
-void toMain::addConnection(toConnection *newconn)
-{
-    Connections.addConnection(newconn);
-
-    // New connection was added - create a default tool for it
-    createDefault();
 }
 
 void toMain::setNeedCommit(toToolWidget *tool, bool needCommit)
 {
     if (tool == NULL)
     {
-        commitAct->setDisabled(true);
-        rollbackAct->setDisabled(true);
-        stopAct->setDisabled(true);
+        fileMenu.commitAct->setDisabled(true);
+        fileMenu.rollbackAct->setDisabled(true);
+        fileMenu.stopAct->setDisabled(true);
         return;
     }
 
@@ -974,8 +701,8 @@ void toMain::setNeedCommit(toToolWidget *tool, bool needCommit)
     ConnectionSelection->setCurrentIndex(pos);
     ConnectionSelection->setItemText(pos, dsc);
 
-    commitAct->setEnabled(needCommit);
-    rollbackAct->setEnabled(needCommit);
+    fileMenu.commitAct->setEnabled(needCommit);
+    fileMenu.rollbackAct->setEnabled(needCommit);
 }
 
 bool toMain::delCurrentConnection(void)
@@ -1091,11 +818,11 @@ void toMain::connectionSelectionChanged(void)
         {
             (*i)->enableAction(false);
         }
-        closeConn->setDisabled(true);
+        fileMenu.closeConnAct->setDisabled(true);
         return;
     }
 
-    closeConn->setEnabled(true);
+    fileMenu.closeConnAct->setEnabled(true);
 
     toConnection const& conn = toConnectionRegistrySing::Instance().currentConnection();
     for (ToolsRegistrySing::ObjectType::iterator i = ToolsRegistrySing::Instance().begin(); i != ToolsRegistrySing::Instance().end(); ++i)
@@ -1131,6 +858,10 @@ void toMain::editOpenFile(const QString &file)
     sheet->setFocus();
 }
 
+void toMain::openPreferences()
+{
+    toPreferences::displayPreferences(this);
+}
 
 toDockbar* toMain::dockbar(toDocklet *let)
 {
@@ -1175,6 +906,11 @@ void toMain::slotActiveToolChaged(toToolWidget *tool)
     lastToolWidget = tool;
 }
 
+void toMain::newVersionAvalable()
+{
+
+}
+
 #ifdef QT_DEBUG
 void toMain::reportFocus()
 {
@@ -1209,21 +945,6 @@ void toMain::exportData(std::map<QString, QString> &data, const QString &prefix)
     try
     {
 
-#if 0
-// No need to do it. We are storing it in QSettings now
-//         if (isMaximized())
-//             data[prefix + ":State"] = QString::fromLatin1("Maximized");
-//         else if (isMinimized())
-//             data[prefix + ":State"] = QString::fromLatin1("Minimized");
-//         else
-//         {
-//             QRect rect = geometry();
-//             data[prefix + ":X"] = QString::number(rect.x());
-//             data[prefix + ":Y"] = QString::number(rect.y());
-//             data[prefix + ":Width"] = QString::number(rect.width());
-//             data[prefix + ":Height"] = QString::number(rect.height());
-//         }
-#endif
         int id = 1;
         std::map<toConnection *, int> connMap;
         {
@@ -1439,18 +1160,11 @@ void toMain::displayMessage(void)
 /** Handle events from toEditWidget subclasses */
 void toMain::receivedFocus(toEditWidget *widget)
 {
-    if (/*toWorksheetEditor *sheet = */dynamic_cast<toWorksheetEditor *>(widget))
+    if (/*toWorksheetText *sheet = */dynamic_cast<toWorksheetText *>(widget))
     {
         RowLabel->setText("?");
         ColumnLabel->setText("?");
     }
-
-    toEditWidget::FlagSetStruct FlagSet = widget->flagSet();
-    openAct->setEnabled(FlagSet.Open);
-    recentMenu->setEnabled(FlagSet.Open);
-    saveAct->setEnabled(FlagSet.Save);
-    saveAsAct->setEnabled(FlagSet.Save);
-    printAct->setEnabled(FlagSet.Print);
 }
 
 /** Handle events from toEditWidget subclasses */
@@ -1458,10 +1172,4 @@ void toMain::lostFocus(toEditWidget *widget)
 {
     RowLabel->setText(QString::null);
     ColumnLabel->setText(QString::null);
-
-    openAct->setEnabled(false);
-    recentMenu->setEnabled(false);
-    saveAct->setEnabled(false);
-    saveAsAct->setEnabled(false);
-    printAct->setEnabled(false);
 }

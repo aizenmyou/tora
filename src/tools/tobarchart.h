@@ -32,15 +32,13 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef TOBARCHART_H
-#define TOBARCHART_H
+#pragma once
 
 #include "tools/tolinechart.h"
 #include "core/utils.h"
 
 /** A widget that displays a barchart. Each line is added onto the next one.
  */
-
 class toBarChart : public toLineChart
 {
         Q_OBJECT
@@ -63,11 +61,9 @@ class toBarChart : public toLineChart
          */
         toBarChart(toBarChart *chart, QWidget *parent = NULL, const char *name = NULL, toWFlags f = 0);
 
-#ifdef TORA3_CHART
         /** Open chart in new window.
          */
         virtual toLineChart *openCopy(QWidget *parent);
-#endif
 };
 
-#endif
+

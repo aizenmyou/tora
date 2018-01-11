@@ -48,6 +48,7 @@
 #include "widgets/toworkingwidget.h"
 #include "core/toglobalconfiguration.h"
 #include "core/todatabaseconfig.h"
+#include "core/tocontextmenu.h"
 
 #include <QtCore/QSize>
 #include <QtCore/QTimer>
@@ -71,7 +72,6 @@ toResultTableView::toResultTableView(QWidget * parent)
     , Model(NULL)
 {
     toEditWidget::FlagSet.Save = true;
-    toEditWidget::FlagSet.Print = true;
     toEditWidget::FlagSet.Copy = true;
     toEditWidget::FlagSet.Search = true;
     toEditWidget::FlagSet.SelectAll = true;
@@ -92,7 +92,6 @@ toResultTableView::toResultTableView(bool readable,
     , Model(NULL)
 {
     toEditWidget::FlagSet.Save = true;
-    toEditWidget::FlagSet.Print = true;
     toEditWidget::FlagSet.Copy = true;
     toEditWidget::FlagSet.Search = true;
     toEditWidget::FlagSet.SelectAll = true;
@@ -107,7 +106,6 @@ toResultTableView::toResultTableView(bool readable,
 void toResultTableView::setup(bool readable, bool numberColumn, bool editable)
 {
     Statistics      = NULL;
-    Menu            = NULL;
     ReadAll         = false;
     Filter          = NULL;
     VisibleColumns  = 0;
@@ -121,17 +119,23 @@ void toResultTableView::setup(bool readable, bool numberColumn, bool editable)
     connect(Working, SIGNAL(stop()), this, SLOT(slotStop()));
     Working->hide(); // hide by default
 
-    createActions();
+    displayAct   = new QAction(tr("&Display in editor..."), this);
+    refreshAct   = new QAction(tr("&Refresh"), this);
+    leftAct      = new QAction(tr("&Left"), this);
+    centerAct    = new QAction(tr("&Center"), this);
+    rightAct     = new QAction(tr("&Right"), this);
+    copyAct      = new QAction(tr("&Copy"), this);
+    copyFormatAct = new QAction(tr("Copy in &format..."), this);
+    copyTransAct = new QAction(tr("Copy &transposed"), this);
+    selectAllAct = new QAction(tr("Select &all"), this);
+    exportAct    = new QAction(tr("E&xport to file..."), this);
+    rowCountAct  = new QAction(tr("C&ount Rows"), this);
+    readAllAct   = new QAction(tr("&Read All"), this);
 
     setSelectionBehavior(QAbstractItemView::SelectItems);
     setSelectionMode(QAbstractItemView::ContiguousSelection);
     setAlternatingRowColors(true);
 
-    setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(this,
-            SIGNAL(customContextMenuRequested(const QPoint &)),
-            this,
-            SLOT(slotDisplayMenu(const QPoint &)));
     connect(horizontalHeader(),
             SIGNAL(sectionResized(int, int, int)),
             this,
@@ -333,24 +337,6 @@ void toResultTableView::clearData()
     freeModel();
 } // clearData
 
-void toResultTableView::createActions()
-{
-    displayAct   = new QAction(tr("&Display in editor..."), this);
-    refreshAct   = new QAction(tr("&Refresh"), this);
-    leftAct      = new QAction(tr("&Left"), this);
-    centerAct    = new QAction(tr("&Center"), this);
-    rightAct     = new QAction(tr("&Right"), this);
-    copyAct      = new QAction(tr("&Copy"), this);
-    copyFormatAct = new QAction(tr("Copy in &format..."), this);
-    copyTransAct = new QAction(tr("Copy &transposed"), this);
-    selectAllAct = new QAction(tr("Select &all"), this);
-    exportAct    = new QAction(tr("E&xport to file..."), this);
-    editAct      = new QAction(tr("&Edit SQL..."), this);
-    rowCountAct  = new QAction(tr("C&ount Rows"), this);
-    readAllAct   = new QAction(tr("&Read All"), this);
-}
-
-
 void toResultTableView::applyFilter()
 {
     if (!Filter || !Model)
@@ -473,58 +459,65 @@ void toResultTableView::slotApplyColumnRules()
         setColumnWidth(1, viewport()->width());
 }
 
-
-void toResultTableView::slotDisplayMenu(const QPoint &pos)
+void toResultTableView::focusInEvent(QFocusEvent *e)
 {
-    if (!Menu)
-    {
-        Menu = new QMenu(this);
-        Menu->addAction(displayAct);
-        Menu->addAction(refreshAct);
+    super::focusInEvent(e);
+    toEditWidget::gotFocus();
+}
 
-        QMenu *just = new QMenu(tr("A&lignment"), this);
-        just->addAction(leftAct);
-        just->addAction(centerAct);
-        just->addAction(rightAct);
-        connect(just,
-                SIGNAL(triggered(QAction *)),
-                this,
-                SLOT(slotMenuCallback(QAction *)));
-        Menu->addAction(just->menuAction());
+void toResultTableView::focusOutEvent(QFocusEvent *e)
+{
+    super::focusOutEvent(e);
+    toEditWidget::lostFocus();
+}
 
-        Menu->addSeparator();
+void toResultTableView::contextMenuEvent(QContextMenuEvent *e)
+{
+    QMenu *popup = new QMenu(this);
 
-        Menu->addAction(copyAct);
-        Menu->addAction(copyFormatAct);
-        // not implemented
-        // Menu->addAction(copyTransAct);
+    // Handle parent widget's context menu fields
+    toContextMenuHandler::traverse(this, popup);
 
-        Menu->addSeparator();
+    popup->addAction(displayAct);
+    popup->addAction(refreshAct);
 
-        Menu->addAction(selectAllAct);
+    QMenu *just = new QMenu(tr("A&lignment"), this);
+    just->addAction(leftAct);
+    just->addAction(centerAct);
+    just->addAction(rightAct);
+    connect(just,
+            SIGNAL(triggered(QAction *)),
+            this,
+            SLOT(slotMenuCallback(QAction *)));
+    popup->addAction(just->menuAction());
 
-        Menu->addSeparator();
+    popup->addSeparator();
 
-        Menu->addAction(exportAct);
+    popup->addAction(copyAct);
+    popup->addAction(copyFormatAct);
 
-        Menu->addSeparator();
+    popup->addSeparator();
 
-        Menu->addAction(editAct);
+    popup->addAction(selectAllAct);
 
-        Menu->addSeparator();
+    popup->addSeparator();
 
-        Menu->addAction(rowCountAct);
-        Menu->addAction(readAllAct);
+    popup->addAction(exportAct);
 
-        connect(Menu,
-                SIGNAL(triggered(QAction *)),
-                this,
-                SLOT(slotMenuCallback(QAction *)));
+    popup->addSeparator();
 
-        emit displayMenu(Menu);
-    }
+    popup->addAction(rowCountAct);
+    popup->addAction(readAllAct);
 
-    Menu->exec(QCursor::pos());
+    connect(popup,
+            SIGNAL(triggered(QAction *)),
+            this,
+            SLOT(slotMenuCallback(QAction *)));
+
+    // Display and "run" the menu
+    e->accept();
+    popup->exec(e->globalPos());
+    delete popup;
 }
 
 
@@ -550,9 +543,6 @@ void toResultTableView::slotMenuCallback(QAction *action)
         editCopy();
     else if (action == selectAllAct)
         editSelectAll();
-    else if (action == editAct)
-        Utils::toStatusMessage("Not yet implemented editSQL(Name).");
-    //toMainWindow::lookup()->editSQL(sqlName());
     else if (action == readAllAct || action == rowCountAct)
     {
         Model->readAll();
@@ -661,6 +651,7 @@ void toResultTableView::setModel(toResultModel *model)
 void toResultTableView::setModel(QAbstractItemModel *model)
 {
     Q_ASSERT_X(qobject_cast<toResultModel*>(model), qPrintable(__QHERE__), "Invaid QAbstractItemModel subclass");
+    QTableView::setModel(model);
 }
 
 bool toResultTableView::isRowSelected(QModelIndex index)
@@ -746,12 +737,6 @@ bool toResultTableView::editSave(bool askfile)
     return false;
 }
 
-
-void toResultTableView::editPrint()
-{
-}
-
-
 void toResultTableView::editCopy()
 {
     QClipboard *clip = qApp->clipboard();
@@ -785,6 +770,11 @@ void toResultTableView::editSelectAll()
     selectAll();
 }
 
+bool toResultTableView::handleSearching(QString const& search, QString const& replace, Search::SearchFlags flags)
+{
+    #pragma message WARN("TODO: implement search in toResultTableView")
+    throw __QHERE__;
+}
 
 void toResultTableView::slotResizeColumnsToContents()
 {

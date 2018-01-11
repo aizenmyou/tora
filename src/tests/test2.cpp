@@ -49,7 +49,6 @@
 #include "widgets/tosplash.h"
 #include "core/tosql.h"
 #include "core/utils.h"
-#include "editor/tomarkededitor.h"
 #include "core/tooracleconst.h"
 
 #include <QtCore/QDateTime>
@@ -70,7 +69,7 @@ static void usage()
 
 int main(int argc, char **argv)
 {
-    toConfigurationNew::setQSettingsEnv();
+    toConfiguration::setQSettingsEnv();
 
     /*! \warning: Keep the code before QApplication init as small
       as possible. There could be serious display issues when

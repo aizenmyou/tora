@@ -6,40 +6,38 @@
 #include "core/toeventquery.h"
 
 #include "result/tomvc.h"
-#include "result/totableview.h"
-#include "result/tocomboview.h"
-#include "result/totreeview.h"
-#include "result/totablemodel.h"
-#include "result/totreemodel.h"
+#include "views/totableview.h"
+#include "views/tocomboview.h"
+#include "views/totreeview.h"
+#include "core/totablemodel.h"
+#include "core/totreemodel.h"
 
 #include <QTreeView>
 
-class toResultView;
+//class toResultView;
 class toToolWidget;
 class toTableModelPriv;
 class QLineEdit;
 class QAction;
 class QWidget;
-class QTableView;
+//class QTableView;
 class toEventQuery;
 
 struct SandboxViewTraits : public MVCTraits
 {
-    enum
-    {
-        AlternatingRowColorsEnabled = true,
-        ShowRowNumber = NoRowNumber,
-        ColumnResize = RowColumResize
-    };
-    //typedef toComboBoxView    View;
-    typedef toTreeViewPriv View;
+    static const bool AlternatingRowColorsEnabled = true;
+    static const int  ShowRowNumber = NoRowNumber;
+    static const int  ColumnResize = RowColumResize;
+
+    //typedef Views::toComboBoxView    View;
+    typedef Views::toTreeView     View;
 };
 
 class SandboxMVC
     : public TOMVC<
     SandboxViewTraits,
     //::DefaultComboBoxViewPolicy,
-    ::DefaultTreeViewPolicy,
+    Views::DefaultTreeViewPolicy,
      ::DefaultDataProviderPolicy
      >
 {
@@ -48,7 +46,7 @@ class SandboxMVC
         typedef TOMVC<
         SandboxViewTraits,
         //::DefaultComboBoxViewPolicy,
-        ::DefaultTreeViewPolicy,
+        Views::DefaultTreeViewPolicy,
         ::DefaultDataProviderPolicy
         > _s;
         SandboxMVC(QWidget *parent) : _s(parent)

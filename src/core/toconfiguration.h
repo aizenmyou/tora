@@ -39,6 +39,7 @@
 
 #include <QtCore/QStringList>
 #include <QtCore/QMap>
+#include <QtCore/QSet>
 #include <QtCore/QSettings>
 #include <QtCore/QVariant>
 #include <QApplication>
@@ -50,76 +51,125 @@ namespace ToConfiguration
 };
 
 class QMetaEnum;
+class toConfigOptionObserver;
 
-class TORA_EXPORT toConfigurationNew: public QObject
+class TORA_EXPORT toConfiguration: public QObject
 {
-        Q_OBJECT;
-        friend class ::ToConfiguration::ConfigContext;
-    public:
-        class OptionNotFound : public std::exception
+    Q_OBJECT;
+    friend class ::ToConfiguration::ConfigContext;
+    friend class toConfigOptionObserver;
+public:
+    class OptionNotFound : public std::exception
     {};
 
-        toConfigurationNew(QObject *parent = 0);
-        virtual ~toConfigurationNew();
+    toConfiguration(QObject *parent = 0);
+    virtual ~toConfiguration();
 
-        QVariant option(int option);
-        QVariant option(QString const& option);
-        template <class T> void setOption(QString const& optionName, T const& newVal)
+    QVariant option(int option);
+    QVariant option(QString const& option);
+    template <class T> void setOption(QString const& optionName, T const& newVal)
+    {
+        if (m_optionToEnumMap.contains(optionName))
         {
-            if (m_optionToEnumMap.contains(optionName))
-            {
-                setOption(m_optionToEnumMap.value(optionName), newVal);
-            }
-            else
-            {
-                logUnknownOption(optionName);
-            }
+            setOption(m_optionToEnumMap.value(optionName), newVal);
         }
-
-        template <class T> void setOption(int option, T const&)
+        else
         {
-        };
+            logUnknownOption(optionName);
+        }
+    }
 
-        void saveAll();
+    template <class T> void setOption(int option, T const&)
+    {
+    };
 
-        /*! \brief Set the QSettings access strings.
+    void saveAll();
+
+    /*! \brief Set the QSettings access strings.
         QSettings uses these. It's used in the main.cpp before
         new QApplication instance init.
         The 2nd usage is in the toConfiguration constructor due
         some strange loading -- values are ignored with empty
         QSettings constructor (maybe due the Loki lib?) */
-        static void setQSettingsEnv();
+    static void setQSettingsEnv();
 
-        // Application location paths
-        static QString sharePath();
-    protected:
-        void registerConfigContext(QString const& context, QMetaEnum const& fields, ToConfiguration::ConfigContext const*);
-    private:
-        void logUnknownOption(QString const&);
+    // Application location paths
+    static QString sharePath();
+protected:
+    void registerConfigContext(QString const& context, QMetaEnum const& fields, ToConfiguration::ConfigContext const*);
+    void registerConfigObserver(toConfigOptionObserver *);
+    void unRegisterConfigObserver(toConfigOptionObserver *);
+private:
+    void logUnknownOption(QString const&);
 
-        QMap<unsigned, QVariant> m_configMap;
-        QMap<unsigned, ToConfiguration::ConfigContext const*> m_configContextPtrMap;
-        QMap<QString, QMetaEnum> m_contextMap;
-        QMap<QString, ToConfiguration::ConfigContext const*> m_contextSetPtrMap;
-        QMap<QString, int> m_optionToEnumMap;
-        QMap<int, QString> m_enumToOptionMap;
-        QSettings m_settings;
+    QMap<unsigned, QVariant> m_configMap;
+    QMap<unsigned, ToConfiguration::ConfigContext const*> m_configContextPtrMap;
+    QMap<QString, QMetaEnum> m_contextMap;
+    QMap<QString, ToConfiguration::ConfigContext const*> m_contextSetPtrMap;
+    QMap<QString, int> m_optionToEnumMap;
+    QMap<int, QString> m_enumToOptionMap;
+    QSettings m_settings;
+
+    void notifyOservers(int option, QVariant const&) const;
+    QMap<int, QSet<toConfigOptionObserver*> > m_observers;
 };
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <QVariant>(int option, QVariant const&);
+void toConfiguration::setOption <QVariant>(int option, QVariant const&);
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <QString>(int option, QString const&);
+void toConfiguration::setOption <QString>(int option, QString const&);
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <int>(int option, int const&);
+void toConfiguration::setOption <int>(int option, int const&);
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <bool>(int option, bool const&);
+void toConfiguration::setOption <bool>(int option, bool const&);
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <QDate>(int option, QDate const&);
+void toConfiguration::setOption <QDate>(int option, QDate const&);
 
-class TORA_EXPORT toConfigurationNewSingle: public ::Loki::SingletonHolder<toConfigurationNew> {};
+class TORA_EXPORT toConfigurationNewSingle: public ::Loki::SingletonHolder<toConfiguration> {};
 
+class toConfigOptionObserver : public QObject
+{
+    Q_OBJECT;
+    friend class toConfiguration;
+public:
+    toConfigOptionObserver(int option)
+        : m_option(option)
+    {
+        toConfigurationNewSingle::Instance().registerConfigObserver(this);
+        m_value = toConfigurationNewSingle::Instance().option(option);
+    }
+    virtual ~toConfigOptionObserver()
+    {
+        toConfigurationNewSingle::Instance().unRegisterConfigObserver(this);
+    }
+
+    operator bool()    const;
+    operator int()     const;
+    operator QString() const;
+    operator QDate()   const;
+
+public slots:
+    void notify(QVariant const newval)
+    {
+        m_value = newval;
+		valueChanged(newval);
+    }
+
+signals:
+    void valueChanged(QVariant const&);
+
+protected:
+    int m_option;
+    QVariant m_value;
+};
+
+template <int option>
+class OptionObserver : public toConfigOptionObserver
+{
+public:
+    OptionObserver() : toConfigOptionObserver(option) {};
+};

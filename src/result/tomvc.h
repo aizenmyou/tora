@@ -32,8 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef __TOMVC_H__
-#define __TOMVC_H__
+#pragma once
 
 #include "core/toresult.h"
 #include "core/toeditwidget.h"
@@ -43,20 +42,26 @@
 #include "core/utils.h"
 
 #include "result/toproviderobserver.h"
-#include "result/totablemodel.h"
-#include "result/totableview.h"
+#include "core/totablemodel.h"
+#include "widgets/toworkingwidget.h"
 
 #include <QtCore/QObject>
 #include <QHeaderView>
 
+namespace Views
+{
+    class toTableView;
+}
+
 /** toTableView traits */
 struct MVCTraits
 {
-    typedef toTableModelPriv   Model;
-    typedef toTableViewPriv    View;
-    typedef toEventQuery       Query;
+    typedef toTableModelPriv                       Model;
+    typedef typename Views::toTableView            View;
+    typedef toEventQuery                           Query;
     typedef toEventQueryObserverObject             ObserverObject;
     typedef toEventQueryObserverObject::Observer   Observer;
+    typedef toWorkingWidgetNew                     WorkingWidget;
 
     enum RowNumberPolicy
     {
@@ -73,15 +78,29 @@ struct MVCTraits
         CustomColumnResize
     };
 
-    enum
+    static const int  SelectionBehavior = QAbstractItemView::SelectItems;
+    static const int  SelectionMode = QAbstractItemView::NoSelection;
+    static const bool AlternatingRowColorsEnabled = false;
+    static const int  ContextMenuPolicy = Qt::NoContextMenu; // DefaultContextMenu => the widget's QWidget::contextMenuEvent() handler is called
+    static const int  ShowRowNumber = TableRowNumber;
+    static const int  ColumnResize = NoColumnResize;
+    static const bool ShowWorkingWidget = true;
+    static const bool WorkingWidgetInteractive = true;
+};
+
+class toResult2
+{
+public:
+    virtual void refreshWithParams(toQueryParams const& params) = 0;
+    virtual void clear() = 0;
+    virtual ~toResult2(){};
+    static toResult2* fromQWidget(QWidget *w)
     {
-        SelectionBehavior = QAbstractItemView::SelectItems,
-        SelectionMode = QAbstractItemView::NoSelection,
-        AlternatingRowColorsEnabled = false,
-        ContextMenuPolicy = Qt::NoContextMenu,
-        ShowRowNumber = TableRowNumber,
-        ColumnResize = NoColumnResize
-    };
+        QAbstractItemView *view = dynamic_cast<QAbstractItemView*>(w);
+        if (view == NULL)
+            return NULL;
+        return dynamic_cast<toResult2*>(view->model());
+    }
 };
 
 template<
@@ -94,14 +113,16 @@ class TOMVC
     , public _T::Observer
     , public _VP< _T>
     , public _DP< _T>
+    , public toResult2
 {
     public:
-        typedef _T                    Traits;
+        typedef _T                     Traits;
         typedef typename Traits::View  View;
         typedef typename Traits::Model Model;
         typedef typename Traits::Query Query;
         typedef typename Traits::Observer       Observer;
         typedef typename Traits::ObserverObject ObserverObject;
+        typedef typename Traits::WorkingWidget  WorkingWidget;
         typedef _VP<Traits>           ViewPolicy;
         typedef _DP<Traits>           DataProviderPolicy;
 
@@ -110,7 +131,8 @@ class TOMVC
 
         void setQuery(Query*);
 
-        QWidget *widget();
+        View* view();
+        QWidget* widget();
 
         /**
          * @name toEventQueryObserverObject::Observer
@@ -127,10 +149,52 @@ class TOMVC
         virtual void observeError(const toConnection::exception &);
         ///@}
 
+        /**
+         * toResult like interface
+         */
+        ///@{
+        /** Get the current connection from the closest tool.
+         * @return Reference to connection.
+         * NOTE: View must inherit from QWidget
+         */
+        toConnection& connection();
+
+        /** Set the SQL statement of this list
+         * @param sql String containing statement.
+         */
+        void setSQL(const QString &sql);
+
+        /** Set the SQL statement of this list. This will also affect @ref Name.
+         * @param sql SQL containing statement.
+         */
+        void setSQL(const toSQL &sql);
+
+        /** Set SQL name of list.
+         */
+        void setSQLName(const QString &name);
+
+        /** Reexecute with changed parameters.
+         * @param list of query parameters
+         */
+        void refreshWithParams(toQueryParams const& params) override;
+        void clear() override;
+
+    protected:
+        /** Perform a query - can be re-implemented by subclasses
+         */
+        virtual void query();
+
+        void setParams(toQueryParams const& params);
+
+        ///@}
     private:
         View  *m_view;
-        Query *m_query;
+        WorkingWidget *m_workingWidget;
+
         ObserverObject *m_observerObject;
+
+        QString m_SQL, m_SQLName;
+        toQueryParams m_Params;
 };
 
 template<
@@ -144,12 +208,17 @@ TOMVC<_T, _VP, _DP>::TOMVC(QWidget *parent)
     , ViewPolicy()
     , DataProviderPolicy()
     , m_view(new View(parent))
-    , m_query(NULL)
     , m_observerObject(new ObserverObject(*this, parent))
+    , m_workingWidget(NULL)
 {
     m_view->setModel(this);
     ViewPolicy::setup(m_view);
     DataProviderPolicy::setup();
+
+    if (_T::ShowWorkingWidget)
+    {
+        m_workingWidget = new WorkingWidget(m_view);
+    }
 }
 
 template<
@@ -171,28 +240,63 @@ void TOMVC<_T, _VP, _DP>::setQuery(Query *query)
 {
     bool retval;
 
-    if ( m_query != NULL && m_query->parent() == this)
+    if ( query->parent() == this)
     {
-        delete m_query;
-        m_query = NULL;
+        // small hack, do not share toEventQuery's ownership with the observer class
+        // hand over the ownership to observer
+        query->setParent(m_observerObject);
     }
 
-    m_query = query;
+    Model::clearAll();
+
     m_observerObject->setQuery(query);
 
-    retval = QObject::connect(m_query, SIGNAL(descriptionAvailable(toEventQuery*, const toQColumnDescriptionList &))
+    retval = QObject::connect(query, SIGNAL(descriptionAvailable(toEventQuery*, const toQColumnDescriptionList &))
                               , m_observerObject, SLOT(eqDescriptionAvailable(toEventQuery*, const toQColumnDescriptionList &)));
     Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: descriptionAvailable");
-    retval = QObject::connect(m_query, SIGNAL(dataAvailable(toEventQuery*))
+    retval = QObject::connect(query, SIGNAL(dataAvailable(toEventQuery*))
                               , m_observerObject, SLOT(eqDataAvailable(toEventQuery*)));
     Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: dataAvailable");
-    retval = QObject::connect(m_query, SIGNAL(error(toEventQuery*, const toConnection::exception &))
+    retval = QObject::connect(query, SIGNAL(error(toEventQuery*, const toConnection::exception &))
                               , m_observerObject, SLOT(eqError(toEventQuery*, const toConnection::exception &)));
     Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: error");
-    retval = QObject::connect(m_query, SIGNAL(done(toEventQuery*,unsigned long))
+    retval = QObject::connect(query, SIGNAL(done(toEventQuery*,unsigned long))
                               , m_observerObject, SLOT(eqDone(toEventQuery*)));
     Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: done");
-    m_query->start();
+
+    if (_T::ShowWorkingWidget)
+    {
+        retval = QObject::connect(query, SIGNAL(descriptionAvailable(toEventQuery*, const toQColumnDescriptionList &))
+                                  , m_workingWidget, SLOT(undisplay()));
+        Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: descriptionAvailable");
+        retval = QObject::connect(query, SIGNAL(dataAvailable(toEventQuery*))
+                                  , m_workingWidget, SLOT(undisplay()));
+        Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: dataAvailable");
+        retval = QObject::connect(query, SIGNAL(error(toEventQuery*, const toConnection::exception &))
+                                  , m_workingWidget, SLOT(undisplay()));
+        Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: error");
+        retval = QObject::connect(query, SIGNAL(done(toEventQuery*,unsigned long))
+                                  , m_workingWidget, SLOT(undisplay()));
+        Q_ASSERT_X(retval, qPrintable(__QHERE__), "connect failed: done");
+
+        if (_T::WorkingWidgetInteractive)
+        {
+            retval = QObject::connect(m_workingWidget, SIGNAL(stop()), query, SLOT(stop()));
+        }
+        m_workingWidget->display();
+    }
+
+    query->start();
+}
+
+template<
+typename _T,
+         template <class> class _VP,
+         template <class> class _DP
+         >
+typename TOMVC< _T, _VP, _DP>::View* TOMVC< _T, _VP, _DP>::view()
+{
+    return m_view;
 }
 
 template<
@@ -278,9 +382,9 @@ void TOMVC< _T, _VP, _DP>::observeData(QObject *q)
 
     try
     {
-        Q_ASSERT_X(m_query != NULL , qPrintable(__QHERE__), " phantom data");
-        Q_ASSERT_X(m_query == query, qPrintable(__QHERE__), " unknown data source");
-        Q_ASSERT_X(m_query->columnCount() >0, qPrintable(__QHERE__), " not described yet");
+        Q_ASSERT_X(m_observerObject->query() != NULL , qPrintable(__QHERE__), " phantom data");
+        Q_ASSERT_X(m_observerObject->query() == query, qPrintable(__QHERE__), " unknown data source");
+        Q_ASSERT_X(m_observerObject->query()->columnCount() >0, qPrintable(__QHERE__), " not described yet");
 
         // TODO to be moved into Policy class (tomvc.h)
         int columns = query->columnCount();
@@ -310,7 +414,6 @@ typename _T,
          >
 void TOMVC< _T, _VP, _DP>::observeDone()
 {
-
 }
 
 template<
@@ -320,7 +423,108 @@ typename _T,
          >
 void TOMVC< _T, _VP, _DP>::observeError(const toConnection::exception &e)
 {
-
 }
 
-#endif
+template<
+	typename _T,
+	template <class> class _VP,
+	template <class> class _DP
+>
+toConnection& TOMVC< _T, _VP, _DP>::connection()
+{
+    return toConnection::currentConnection(m_view);
+}
+
+template<
+    typename _T,
+    template <class> class _VP,
+    template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::setSQL(const QString &sql)
+{
+    m_SQL = sql;
+}
+
+template<
+    typename _T,
+    template <class> class _VP,
+    template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::setSQL(const toSQL &sql)
+{
+    setSQLName(sql.name());
+    try
+    {
+        m_Params.clear();
+        setSQL(toSQL::string(sql, connection()));
+    }
+    catch (QString const& e)
+    {
+        TLOG(8, toDecorator, __HERE__) << e << std::endl;
+        m_SQL.clear();
+        throw (e);
+    }
+}
+
+template<
+    typename _T,
+    template <class> class _VP,
+    template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::setSQLName(const QString &name)
+{
+    m_SQLName = name;
+}
+
+template<
+    typename _T,
+    template <class> class _VP,
+    template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::refreshWithParams(toQueryParams const& params)
+{
+    setParams(params);
+    QString sql(m_SQL);
+    if(sql.isEmpty())
+    {
+        sql = toSQL::string(m_SQLName, connection());
+    }
+    toEventQuery *Query = new toEventQuery(this, connection(), sql, m_Params, toEventQuery::READ_ALL);
+    setQuery(Query);
+}
+
+template<
+	typename _T,
+	template <class> class _VP,
+	template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::clear()
+{
+    Model::clearAll();
+}
+
+template<
+    typename _T,
+    template <class> class _VP,
+    template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::query()
+{
+    QString sql(m_SQL);
+    if(sql.isEmpty())
+    {
+        sql = toSQL::string(m_SQLName, connection());
+    }
+    toEventQuery *Query = new toEventQuery(this, connection(), sql, m_Params, toEventQuery::READ_ALL);
+    setQuery(Query);
+}
+
+template<
+    typename _T,
+    template <class> class _VP,
+    template <class> class _DP
+>
+void TOMVC< _T, _VP, _DP>::setParams(toQueryParams const& params)
+{
+    m_Params = params;
+}

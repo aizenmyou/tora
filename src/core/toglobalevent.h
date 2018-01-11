@@ -55,88 +55,94 @@ class toConnection;
  */
 class TORA_EXPORT toGlobalEvent : public QObject
 {
-        Q_OBJECT;
+    Q_OBJECT;
 
-    public:
-        toGlobalEvent();
+public:
+    toGlobalEvent();
 
-        /** Check if object caching is done.
-         */
-        void checkCaching(void);
+    /** Check if object caching is done.
+     */
+    void checkCaching(void);
 
-        /**
-         * Open a file in sql worksheet
-         */
-        void editOpenFile(const QString &file);
+    /**
+     * Open a file in sql worksheet
+     */
+    void editOpenFile(const QString &file);
 
-        /** Add recent file
-         */
-        void addRecentFile(const QString &filename);
+    /** Add recent file
+     */
+    void addRecentFile(const QString &filename);
 
-        /**
-         * allow tools to add custom menus (ie. File, Edit, Sql Editor)
-         * without giving away public access to menubars.
-         */
-        void addCustomMenu(QMenu *menu);
+    /**
+     * open Preferences window. toPrefereces depends on various classes, therefore it is in main/topreferences.cpp
+     */
+    void openPreferences();
 
-        /** Called by @ref toTool when a new tool is created.
-         * @param tool The tool widget created.
-         */
-        void toolWidgetAdded(toToolWidget *tool);
+    /**
+     * allow tools to add custom menus (ie. File, Edit, Sql Editor)
+     * without giving away public access to menubars.
+     */
+    void addCustomMenu(QMenu *menu);
 
-        /** Called by @ref toToolWidget when a new tool is about to be destroyed.
-         * @param tool The tool widget.
-         */
-        void toolWidgetRemoved(toToolWidget *tool);
+    /** Called by @ref toTool when a new tool is created.
+     * @param tool The tool widget created.
+     */
+    void toolWidgetAdded(toToolWidget *tool);
 
-        void toolWidgetsReordered();
+    /** Called by @ref toToolWidget when a new tool is about to be destroyed.
+     * @param tool The tool widget.
+     */
+    void toolWidgetRemoved(toToolWidget *tool);
 
-        /**
-         * Set coordinates in the statusbar.
-         *
-         * Used to indicate current cursor position by child widgets.
-         */
-        void setCoordinates(int, int);
+    void toolWidgetsReordered();
 
-        /**
-         * Create the default tool for the current connection.
-         *
-         * This is the tool with the highest priority, usually the SQL worksheet.
-         */
-        void createDefaultTool(void);
+    /**
+     * Set coordinates in the statusbar.
+     *
+     * Used to indicate current cursor position by child widgets.
+     */
+    void setCoordinates(int, int);
 
-        /**
-         * Show a statusbar message.
-         *
-         * @param str message to show
-         * @param save save to messages menu
-         * @param log
-         */
-        void showMessage(const QString &str, bool save, bool log);
+    /**
+     * Create the default tool for the current connection.
+     *
+     * This is the tool with the highest priority, usually the SQL worksheet.
+     */
+    void createDefaultTool(void);
 
-        /**
-         * Add a new connection. The connection itself must already be created.
-         * Returns the connection or it's duplicate already opened connection.
-         */
-        void addConnection(toConnection *conn, bool def = true);
+    /**
+     * Show a statusbar message.
+     *
+     * @param str message to show
+     * @param save save to messages menu
+     * @param log
+     */
+    void showMessage(const QString &str, bool save, bool log);
 
-        /** Set if a connection needs to be committed. Also updates visual feedback in interface.
-         */
-        void setNeedCommit(toToolWidget *tool, bool needCommit = true);
+    /**
+     * Add a new connection. The connection itself must already be created.
+     * Returns the connection or it's duplicate already opened connection.
+     */
+    void addConnection(toConnection *conn, bool def = true);
 
-    signals:
-        void s_checkCaching(void);
-        void s_editOpenFile(const QString &filename);
-        void s_addRecentFile(const QString &filename);
-        void s_addCustomMenu(QMenu *menu);
-        void s_toolWidgetAdded(toToolWidget *tool);
-        void s_toolWidgetRemoved(toToolWidget *tool);
-        void s_toolWidgetsReordered();
-        void s_setCoordinates(int x, int y);
-        void s_createDefaultTool(void);
-        void s_showMessage(QString str, bool save, bool log);
-        void s_addConnection(toConnection *conn, bool def);
-        void s_setNeedCommit(toToolWidget *tool, bool needCommit);
+    /** Set if a connection needs to be committed. Also updates visual feedback in interface.
+     */
+    void setNeedCommit(toToolWidget *tool, bool needCommit = true);
+
+signals:
+    void s_checkCaching(void);
+    void s_editOpenFile(const QString &filename);
+    void s_addRecentFile(const QString &filename);
+    void s_openPreferences();
+    void s_addCustomMenu(QMenu *menu);
+    void s_toolWidgetAdded(toToolWidget *tool);
+    void s_toolWidgetRemoved(toToolWidget *tool);
+    void s_toolWidgetsReordered();
+    void s_setCoordinates(int x, int y);
+    void s_createDefaultTool(void);
+    void s_showMessage(QString str, bool save, bool log);
+    void s_addConnection(toConnection *conn, bool def);
+    void s_setNeedCommit(toToolWidget *tool, bool needCommit);
 };
 
 typedef Loki::SingletonHolder<toGlobalEvent> toGlobalEventSingle;

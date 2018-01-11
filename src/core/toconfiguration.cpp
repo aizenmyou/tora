@@ -43,18 +43,18 @@
 #include <QtCore/QDir>
 #include <QtCore/QDate>
 
-toConfigurationNew::toConfigurationNew(QObject *parent)
+toConfiguration::toConfiguration(QObject *parent)
     : QObject(parent)
     , m_settings(TOORGNAME, TOAPPNAME)
 {
     setQSettingsEnv();
 }
 
-toConfigurationNew::~toConfigurationNew()
+toConfiguration::~toConfiguration()
 {
 }
 
-void toConfigurationNew::registerConfigContext(QString const& contextName, QMetaEnum const& fields, ToConfiguration::ConfigContext const* context)
+void toConfiguration::registerConfigContext(QString const& contextName, QMetaEnum const& fields, ToConfiguration::ConfigContext const* context)
 {
     Q_ASSERT_X( !m_contextMap.contains(contextName), qPrintable(__QHERE__), qPrintable(QString("Context %1 is already registered").arg(contextName)));
     m_contextMap.insert(contextName, fields);
@@ -74,7 +74,17 @@ void toConfigurationNew::registerConfigContext(QString const& contextName, QMeta
 
 }
 
-QVariant toConfigurationNew::option(int optionKey)
+void toConfiguration::registerConfigObserver(toConfigOptionObserver *o)
+{
+    m_observers[o->m_option].insert(o);
+}
+
+void toConfiguration::unRegisterConfigObserver(toConfigOptionObserver *o)
+{
+    m_observers[o->m_option].remove(o);
+}
+
+QVariant toConfiguration::option(int optionKey)
 {
     Q_ASSERT_X( m_configMap.contains(optionKey), qPrintable(__QHERE__), qPrintable(QString("Unknown enum: %1").arg(optionKey)));
     // If config option was not loaded yet load it
@@ -118,7 +128,7 @@ QVariant toConfigurationNew::option(int optionKey)
     return m_configMap.value(optionKey);
 }
 
-QVariant toConfigurationNew::option(QString const& o)
+QVariant toConfiguration::option(QString const& o)
 {
     if (!m_optionToEnumMap.contains(o))
         throw OptionNotFound();
@@ -126,7 +136,7 @@ QVariant toConfigurationNew::option(QString const& o)
     return option(opt);
 }
 
-void toConfigurationNew::saveAll()
+void toConfiguration::saveAll()
 {
     m_settings.beginGroup("preferences");
 
@@ -186,7 +196,7 @@ void toConfigurationNew::saveAll()
 }
 
 // a static one
-void toConfigurationNew::setQSettingsEnv()
+void toConfiguration::setQSettingsEnv()
 {
     if (QCoreApplication::organizationName().isEmpty())
         QCoreApplication::setOrganizationName(TOORGNAME);
@@ -196,7 +206,7 @@ void toConfigurationNew::setQSettingsEnv()
         QCoreApplication::setApplicationName(TOAPPNAME);
 }
 
-QString toConfigurationNew::sharePath()
+QString toConfiguration::sharePath()
 {
 #ifdef Q_OS_WIN32
     QString appl = QCoreApplication::applicationDirPath();
@@ -210,7 +220,7 @@ QString toConfigurationNew::sharePath()
 }
 
 template<>
-void toConfigurationNew::setOption <QVariant>(int option, QVariant const& newVal)
+void toConfiguration::setOption <QVariant>(int option, QVariant const& newVal)
 {
 #ifdef QT_DEBUG
     ToConfiguration::ConfigContext const* ctx = m_configContextPtrMap.value(option);
@@ -222,10 +232,11 @@ void toConfigurationNew::setOption <QVariant>(int option, QVariant const& newVal
                                                                              ));
 #endif
     m_configMap[option] = newVal;
+    notifyOservers(option, newVal);
 }
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <QString>(int option, QString const& newVal)
+void toConfiguration::setOption <QString>(int option, QString const& newVal)
 {
 #ifdef QT_DEBUG
     ToConfiguration::ConfigContext const* ctx = m_configContextPtrMap.value(option);
@@ -236,10 +247,11 @@ void toConfigurationNew::setOption <QString>(int option, QString const& newVal)
                                                                                 ));
 #endif
     m_configMap[option] = QVariant(newVal);
+    notifyOservers(option, newVal);
 }
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <int>(int option, int const&newVal)
+void toConfiguration::setOption <int>(int option, int const&newVal)
 {
 #ifdef QT_DEBUG
     ToConfiguration::ConfigContext const* ctx = m_configContextPtrMap.value(option);
@@ -250,10 +262,11 @@ void toConfigurationNew::setOption <int>(int option, int const&newVal)
                                                                              ));
 #endif
     m_configMap[option] = QVariant(newVal);
+    notifyOservers(option, newVal);
 }
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <bool>(int option, bool const&newVal)
+void toConfiguration::setOption <bool>(int option, bool const&newVal)
 {
 #ifdef QT_DEBUG
     ToConfiguration::ConfigContext const* ctx = m_configContextPtrMap.value(option);
@@ -264,10 +277,11 @@ void toConfigurationNew::setOption <bool>(int option, bool const&newVal)
                                                                               ));
 #endif
     m_configMap[option] = QVariant(newVal);
+    notifyOservers(option, newVal);
 }
 
 template<> TORA_EXPORT
-void toConfigurationNew::setOption <QDate>(int option, QDate const&newVal)
+void toConfiguration::setOption <QDate>(int option, QDate const&newVal)
 {
 #ifdef QT_DEBUG
     ToConfiguration::ConfigContext const* ctx = m_configContextPtrMap.value(option);
@@ -278,9 +292,38 @@ void toConfigurationNew::setOption <QDate>(int option, QDate const&newVal)
                                                                               ));
 #endif
     m_configMap[option] = QVariant(newVal);
+    notifyOservers(option, newVal);
 }
 
-void toConfigurationNew::logUnknownOption(QString const&)
+void toConfiguration::logUnknownOption(QString const&)
 {
 
+}
+
+void toConfiguration::notifyOservers(int option, QVariant const&value) const
+{
+    QSet<toConfigOptionObserver*> const& observers = m_observers.value(option);
+    foreach(toConfigOptionObserver *o, observers)
+    {
+        o->notify(value);
+    }
+}
+
+toConfigOptionObserver::operator bool() const
+{
+    return m_value.toBool();
+}
+
+toConfigOptionObserver::operator int() const
+{
+    return m_value.toInt();
+}
+toConfigOptionObserver::operator QString() const
+{
+    return m_value.toString();
+}
+
+toConfigOptionObserver::operator QDate() const
+{
+    return m_value.toDate();
 }

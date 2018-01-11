@@ -32,13 +32,17 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef TO_EXTRACT
-#define TO_EXTRACT
+#pragma once
 
 //#include "core/tosqlparse.h"
 
+#include "core/tocache.h"
+
 #include <list>
 #include <map>
+#include <memory>
+
+#include <loki/Factory_alt.h>
 
 #include <QtCore/QFile>
 #include <QtCore/QTextStream>
@@ -55,9 +59,46 @@ class toConnection;
  * This class can be used to reverse engineered database objects.
  */
 
-class toExtract
+class toExtract :public QObject
 {
-    public:
+    Q_OBJECT;
+    Q_ENUMS(ObjectType);
+public:
+    typedef QList<QPair<QString,toCache::ObjectRef> > ObjectList;
+
+        enum ObjectType
+        {
+            NO_TYPE = toCache::NO_TYPE,  // used internally
+            TABLE = toCache::TABLE,
+            VIEW  = toCache::VIEW,
+            SYNONYM = toCache::SYNONYM,
+            PROCEDURE = toCache::PROCEDURE,
+            FUNCTION = toCache::FUNCTION,
+            PACKAGE = toCache::PACKAGE,
+            PACKAGE_BODY = toCache::PACKAGE_BODY,
+            INDEX = toCache::INDEX,
+            SEQUENCE = toCache::SEQUENCE,
+            TRIGGER = toCache::TRIGGER,
+            //// These toCache enum values are not used by the extractor
+            // DATABASE,         // used by MySQL
+            // ANY,              // used for querying purposes only
+            // TORA_SCHEMA_LIST, // Curious object type - used internally by TORA, if present browser knows that that schema was read from DB
+            // TORA_USER_LIST,   // Curious object type - used internally by TORA purpose unknown so far.
+            USER = toCache::USER,
+            ROLE = toCache::ROLE,
+            PROFILE = toCache::PROFILE,
+            DATABASE_LINK = toCache::DATABASE_LINK,
+            TYPE = toCache::TYPE,
+            DIRECTORY = toCache::DIRECTORY,
+            MATERIALIZED_VIEW = toCache::MATERIALIZED_VIEW,
+            // Following enum values are not shared with toCache
+            TABLE_FAMILY = toCache::OTHER + 1,// Table including indexes and constraints
+            TABLE_CONTENTS,
+            TABLE_REFERENCES,
+            CONSTRAINT
+        };
+
+
         /** Describes an available datatype for the database.
          */
         class datatype
@@ -127,6 +168,7 @@ class toExtract
         class extractor
         {
             protected:
+                toExtract &ext;
                 /** Register an operation to be handled by this extractor.
                  * @param db Database this extractor works on.
                  * @param oper What kind of operation to implement. Can be one of CREATE,
@@ -135,16 +177,7 @@ class toExtract
                  */
                 void registerExtract(const QString &db,
                                      const QString &oper,
-                                     const QString &type);
-                /** Unregister an operation to be handled by this extractor.
-                 * @param db Database this extractor works on.
-                 * @param oper What kind of operation to implement. Can be one of CREATE,
-                 *             DESCRIBE, MIGRATE or DROP.
-                 * @param type The type of object that this is implemented for. Database specific.
-                 */
-                void unregisterExtract(const QString &db,
-                                       const QString &oper,
-                                       const QString &type);
+                                     ObjectType type);
             public:
                 /** Create an extractor. Normally called from a statical instantiator. Should register
                  * objects it can handle @ref registerExtract. Apart from the objects it handles one
@@ -153,7 +186,7 @@ class toExtract
                  * constructed toExtract object.
                  * operation.
                  */
-                extractor();
+                extractor(toExtract &parent);
                 /** Destructor.
                  */
                 virtual ~extractor();
@@ -163,7 +196,7 @@ class toExtract
                  * toExtract::setBlocksize).
                  * @param ext Extractor to generate script.
                  */
-                virtual void initialize(toExtract &ext) const;
+                virtual void initialize() = 0;
 
                 /** Called to generate a script to recreate a database object.
                  * @param ext Extractor to generate script.
@@ -176,12 +209,12 @@ class toExtract
                  * @param name Name of database object.
                  * @return A string containing a script to recreate an object.
                  */
-                virtual void create(toExtract &ext,
+                virtual void create(
                                     QTextStream &stream,
-                                    const QString &type,
+                                    ObjectType type,
                                     const QString &schema,
                                     const QString &owner,
-                                    const QString &name) const;
+                                    const QString &name) = 0;
                 /** Called to describe a database object.
                  * @param ext Extractor to generate script.
                  * @param lst List of descriptions for the object. Should be appended.
@@ -192,55 +225,27 @@ class toExtract
                  * @param owner Owner of database object.
                  * @param name Name of database object.
                  */
-                virtual void describe(toExtract &ext,
+                virtual void describe(
                                       std::list<QString> &lst,
-                                      const QString &type,
+                                      ObjectType type,
                                       const QString &schema,
                                       const QString &owner,
-                                      const QString &name) const;
-                /** Called to generate a script to migrate a database object from one description to
-                 * another description.
-                 * @param ext Extractor to generate script.
-                 * @param type Type of object to migrate.
-                 * @param src Source description list.
-                 * @param dst Destination description list.
-                 * @return A script to change the src database object to dst.
-                 */
-                virtual void migrate(toExtract &ext,
-                                     QTextStream &stream,
-                                     const QString &type,
-                                     std::list<QString> &src,
-                                     std::list<QString> &dst) const;
-
-                /** Called to generate a script to drop an object.
-                 * @param ext Extractor to generate script.
-                 * @param type Type of object to recreate.
-                 * @param schema Specify the schema of the output script or description. If empty
-                 *               don't specify any object. If the string "1" use same object as input.
-                 *               Otherwise use the specified schema.
-                 * @param owner Owner of database object.
-                 * @param name Name of database object.
-                 * @return A string containing a script to recreate an object.
-                 */
-                virtual void drop(toExtract &ext,
-                                  QTextStream &stream,
-                                  const QString &type,
-                                  const QString &schema,
-                                  const QString &owner,
-                                  const QString &name) const;
+                                      const QString &name) = 0;
 
                 /** Get the available datatypes for the database.
                  */
                 virtual std::list<datatype> datatypes() const;
+            protected:
+                toConnection& connection() { return ext.connection(); }
+                QString quote(QString const& name);
         };
 
-    private:
         toConnection &Connection;
+    private:
         QWidget *Parent;
 
         // Attributes
         QString Schema;
-        QString Resize;
         bool Code;
         bool Comments;
         bool Constraints;
@@ -266,36 +271,13 @@ class toExtract
         // Context, can be used by the extractor to save context
         std::map<QString, QVariant> Context;
 
-        // Stuff to handle extractors
-        static std::map<QString, extractor *> *Extractors;
-
-        static void allocExtract(void);
-        static QString extractorName(const QString &db,
-                                     const QString &oper,
-                                     const QString &type);
-        static extractor *findExtractor(toConnection const& conn,
-                                        const QString &oper,
-                                        const QString &type);
-        extractor *findExtractor(const QString &oper,
-                                 const QString &type)
-        {
-            return findExtractor(Connection, oper, type);
-        }
-        void initialize(void);
+        std::unique_ptr<extractor> ext;
 
         // General internal functions
 
-        /** Parse an object string to get owner and name of the object.
-         * @param object Object string on the format {owner}.{name}.
-         * @param owner Reference to string which will get the object owner.
-         * @param name Reference to string which will get the object name.
-         */
-        void parseObject(const QString &object, QString &owner, QString &name);
-        void setSizes(void);
-
         void rethrow(const QString &what, const QString &object, const QString &exc);
-        QString generateHeading(const QString &action, std::list<QString> &list);
-        static std::map<QString, std::list<QString> > migrateGroup(std::list<QString> &grpLst);
+        QString generateHeading(const QString &action, const ObjectList &objects);
+
     public:
         /** Create a new extractor.
          * @param conn Connection to extract from.
@@ -315,7 +297,7 @@ class toExtract
          *               TRIGGER, TYPE, USER, USER GRANTS for Oracle databases.
          * @return A string containing a script to recreate the specified objects.
          */
-        QString create(std::list<QString> &object)
+        QString create(const ObjectList &object)
         {
             QString ret;
             QTextStream s(&ret, QIODevice::WriteOnly);
@@ -334,7 +316,7 @@ class toExtract
          *               TABLE CONTENTS, TABLE REFERENCES, TABLESPACE, TRIGGER,
          *               TRIGGER, TYPE, USER, USER GRANTS for Oracle databases.
          */
-        void create(QTextStream &stream, std::list<QString> &object);
+        void create(QTextStream &stream, const ObjectList &objects);
 
         /** Create a description of objects.
          * @param object List of object. This has the format {type}:{schema}.{object}.
@@ -350,66 +332,7 @@ class toExtract
          *         considered like a list of strings separated by the character '\001'.
          *         The later in each string the smaller item the change and it is hierachical.
          */
-        std::list<QString> describe(std::list<QString> &object);
-
-        /** Create script to drop a list of objects.
-         * @param object List of object. This has the format {type}:{schema}.{object}.
-         *               The type is database dependent but can as an example be of
-         *               CONSTRAINT, DATABASE LINK, EXCHANGE INDEX,
-         *               EXCHANGE TABLE, FUNCTION, INDEX, MATERIALIZED VIEW,
-         *               MATERIALIZED VIEW LOG, PACKAGE, PACKAGE BODY, PROCEDURE,
-         *               PROFILE, ROLE, ROLE GRANTS, ROLLBACK SEGMENT, SEQUENCE,
-         *               SNAPSHOT, SNAPSHOT LOG, SYNONYM, TABLE, TABLE FAMILY,
-         *               TABLE CONTENTS, TABLE REFERENCES, TABLESPACE, TRIGGER,
-         *               TRIGGER, TYPE, USER, USER GRANTS for Oracle databases.
-         * @return A string containing a script to drop the specified objects.
-         */
-        QString drop(std::list<QString> &object)
-        {
-            QString ret;
-            QTextStream s(&ret, QIODevice::WriteOnly);
-            drop(s, object);
-            return ret;
-        }
-
-        /** Create script to drop a list of objects.
-         * @param stream Stream to write result to.
-         * @param object List of object. This has the format {type}:{schema}.{object}.
-         *               The type is database dependent but can as an example be of
-         *               CONSTRAINT, DATABASE LINK, EXCHANGE INDEX,
-         *               EXCHANGE TABLE, FUNCTION, INDEX, MATERIALIZED VIEW,
-         *               MATERIALIZED VIEW LOG, PACKAGE, PACKAGE BODY, PROCEDURE,
-         *               PROFILE, ROLE, ROLE GRANTS, ROLLBACK SEGMENT, SEQUENCE,
-         *               SNAPSHOT, SNAPSHOT LOG, SYNONYM, TABLE, TABLE FAMILY,
-         *               TABLE CONTENTS, TABLE REFERENCES, TABLESPACE, TRIGGER,
-         *               TRIGGER, TYPE, USER, USER GRANTS for Oracle databases.
-         * @return A string containing a script to drop the specified objects.
-         */
-        void drop(QTextStream &stream, std::list<QString> &object);
-
-        /** Called to generate a script to migrate a database object from one description to
-         * another description.
-         * @param stream Stream to write result to.
-         * @param src Source description list, generated by describes for the same database.
-         * @param dst Destination description list, generated by describes for the same database.
-         * @return A script to change the src database object to dst.
-         */
-        QString migrate(std::list<QString> &drpLst, std::list<QString> &crtLst)
-        {
-            QString ret;
-            QTextStream s(&ret, QIODevice::WriteOnly);
-            migrate(s, drpLst, crtLst);
-            return ret;
-        }
-
-        /** Called to generate a script to migrate a database object from one description to
-         * another description.
-         * @param stream Stream to write result to.
-         * @param src Source description list, generated by describes for the same database.
-         * @param dst Destination description list, generated by describes for the same database.
-         * @return A script to change the src database object to dst.
-         */
-        void migrate(QTextStream &stream, std::list<QString> &drpLst, std::list<QString> &crtLst);
+        std::list<QString> describe(const ObjectList &objects);
 
         /** Set a context for this extractor.
          * @param name Name of this context
@@ -430,17 +353,6 @@ class toExtract
         void setSchema(const QString &schema)
         {
             Schema = schema;
-        }
-        /** Set sizes to use for resize of object on extraction.
-         * @param A list of sizes separated by ':'. Should be an even multiple of three where
-         *        the first value is the largest current size to use these values. The next
-         *        value is the initial value to use, the last is the next increment value to
-         *        use. As a special case the string "1" can be used to set up auto resize.
-         */
-        void setResize(const QString &resize)
-        {
-            Resize = resize;
-            setSizes();
         }
         /** Set inclusion of prompts.
          * @param prompt If prompt generation should be generated.
@@ -534,7 +446,6 @@ class toExtract
         void setBlockSize(int val)
         {
             BlockSize = val;
-            setSizes();
         }
 
         /** Get schema specification.
@@ -544,14 +455,6 @@ class toExtract
         const QString &getSchema(void)
         {
             return Schema;
-        }
-        /** Get resize specification.
-         * @return Resize specification.
-         * @see setResize
-         */
-        bool getResize(void)
-        {
-            return !Resize.isEmpty();
         }
         /** Check if prompt are generated.
          * @return If prompts are generated.
@@ -657,14 +560,6 @@ class toExtract
             return Connection;
         }
 
-        /** Fill in the initial and next value for an object currently holding a @ref number of
-         * allocated blocks. Uses the resize or default sizes.
-         * @param blocks Blocks currently allocated.
-         * @param initial New initial value.
-         * @param next New next value.
-         */
-        void initialNext(const QString &blocks, QString &initial, QString &next);
-
         /** Get the schema name specified by the extractor setup. Will include the following '.'
          * if needed.
          * @param owner Owner of object to get schema for.
@@ -672,20 +567,6 @@ class toExtract
          * @return The translated schema.
          */
         QString intSchema(const QString &owner, bool desc);
-
-        /** Get the available datatypes for a database.
-         * @return A list of datatypes.
-         */
-        std::list<datatype> datatypes();
-
-        /** Utility function, creates a statement from the start to the end specified by the
-         * parameters. The connection used to specify parsing is the one of the extractor.
-         * @param start Start of parameters.
-         * @param end End of parameters.
-         * @return The indented statement.
-         */
-        //QString createFromParse(std::list<toSQLParse::statement>::iterator start,
-        //                        std::list<toSQLParse::statement>::iterator end);
 
         /** Create a source and destination object list to two other lists
          * containing dropped and created objects or attributes.
@@ -696,12 +577,6 @@ class toExtract
          */
         static void srcDst2DropCreate(std::list<QString> &source, std::list<QString> &destination,
                                       std::list<QString> &drop, std::list<QString> &creat);
-
-        /** Check if a database is supported at all by the extractor.
-         * @param conn Connection to check for support.
-         * @return True if the database is supported.
-         */
-        static bool canHandle(const toConnection &conn);
 
         /** Add a list to description.
          * @param ret The return list to add a line to.
@@ -804,7 +679,10 @@ class toExtract
             return parseColumnDescription(description.begin(), description.end(), level);
         }
 
+        static ObjectType objectTypeFromString(const QString& type);
+
         friend class extractor;
 };
 
-#endif
+typedef TORA_EXPORT Util::GenericFactory<toExtract::extractor, LOKI_TYPELIST_1(toExtract &)> ExtractorFactory;
+class TORA_EXPORT ExtractorFactorySing: public ::Loki::SingletonHolder<ExtractorFactory> {};

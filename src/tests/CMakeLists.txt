@@ -1,4 +1,4 @@
-
+# NOTE: also check src/core/tora_export.h
 
 #FOREACH(item ${TORA_MOC_SOURCES})
 #STRING(REGEX MATCH ".*/core/moc_.*c..$" item ${item})
@@ -7,9 +7,9 @@
 #ENDIF(item)
 #EgNDFOREACH(item ${TORA_MOC_SOURCES})
 
-IF(TORA_DEBUG AND TEST_APP1)
-# test1
-ADD_EXECUTABLE("test1" ${GUI_TYPE}
+IF(TORA_DEBUG AND TEST_APP01)
+# test01
+ADD_EXECUTABLE("test01" ${GUI_TYPE}
   tests/test1.cpp
   ${PCH_SOURCE}  
   ${CORE_SOURCES}        #$<TARGET_OBJECTS:CORE_OBJECT_LIB>
@@ -17,7 +17,7 @@ ADD_EXECUTABLE("test1" ${GUI_TYPE}
   ${WIDGETS_SOURCES}     #$<TARGET_OBJECTS:WIDGETS_OBJECT_LIB>
   ${LOGGING_SOURCES}
   )
-TARGET_LINK_LIBRARIES("test1"
+TARGET_LINK_LIBRARIES("test01"
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
@@ -26,24 +26,23 @@ TARGET_LINK_LIBRARIES("test1"
 	${TORA_LOKI_LIB}
 	${TORA_QSCINTILLA_LIB}
 	${QSCINTILLA_LIBRARIES}
-	antlr3c
 )
-SET_TARGET_PROPERTIES("test1" PROPERTIES ENABLE_EXPORTS ON)
+SET_TARGET_PROPERTIES("test01" PROPERTIES ENABLE_EXPORTS ON)
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test1" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test01" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-ENDIF(TORA_DEBUG AND TEST_APP1)
+ENDIF(TORA_DEBUG AND TEST_APP01)
 
-IF(TORA_DEBUG AND TEST_APP2)  
-# test2
-ADD_EXECUTABLE("test2" ${GUI_TYPE}
+IF(TORA_DEBUG AND TEST_APP02)  
+# test02
+ADD_EXECUTABLE("test02" ${GUI_TYPE}
   tests/test2.cpp
   ${PCH_SOURCE}  
   ${CORE_SOURCES}
   ${WIDGETS_SOURCES}
   ${LOGGING_SOURCES}
   )
-TARGET_LINK_LIBRARIES("test2"
+TARGET_LINK_LIBRARIES("test02"
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
@@ -53,14 +52,14 @@ TARGET_LINK_LIBRARIES("test2"
 	${QSCINTILLA_LIBRARIES}
 	${TORA_LOKI_LIB}
 )
-SET_TARGET_PROPERTIES("test2" PROPERTIES ENABLE_EXPORTS ON)
+SET_TARGET_PROPERTIES("test02" PROPERTIES ENABLE_EXPORTS ON)
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test2" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test02" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-ENDIF(TORA_DEBUG AND TEST_APP2)
+ENDIF(TORA_DEBUG AND TEST_APP02)
 
-IF(TORA_DEBUG AND TEST_APP3)
-# test3
+IF(TORA_DEBUG AND TEST_APP03)
+# test02
 QT5_WRAP_CPP(TEST3_MOC_SOURCES tests/test3window.h
 	connection/tooracleconfiguration.h
 	result/toresulttabledata.h
@@ -78,9 +77,8 @@ QT5_WRAP_CPP(TEST3_MOC_SOURCES tests/test3window.h
 	tools/toresulttableviewedit.h
 	tools/toresultview.h
 	tools/toworksheet.h
-	tools/toworksheeteditor.h
 	)
-ADD_EXECUTABLE("test3" ${GUI_TYPE}
+ADD_EXECUTABLE("test03" ${GUI_TYPE}
   tests/test3.cpp
   tests/test3window.cpp
   connection/tooracleconfiguration.cpp
@@ -99,7 +97,6 @@ ADD_EXECUTABLE("test3" ${GUI_TYPE}
   tools/toresulttableviewedit.cpp  
   tools/toresultview.cpp
   tools/toworksheet.cpp
-  tools/toworksheeteditor.cpp
   ${TEST3_MOC_SOURCES}
   ${PCH_SOURCE}  
   ${CORE_SOURCES}    
@@ -108,7 +105,7 @@ ADD_EXECUTABLE("test3" ${GUI_TYPE}
   ${EDITOR_SOURCES}
   ${LOGGING_SOURCES}
   )
-TARGET_LINK_LIBRARIES("test3"
+TARGET_LINK_LIBRARIES("test03"
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
@@ -118,26 +115,23 @@ TARGET_LINK_LIBRARIES("test3"
 	${TORA_QSCINTILLA_LIB}
 	${QSCINTILLA_LIBRARIES}	
 	${TORA_LOKI_LIB}
-	antlr3c	
 	)
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test3" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test03" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-SET_TARGET_PROPERTIES("test3" PROPERTIES ENABLE_EXPORTS ON)
-ENDIF(TORA_DEBUG AND TEST_APP3)
+SET_TARGET_PROPERTIES("test03" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP03)
 
-IF(TORA_DEBUG AND TEST_APP4)
+IF(TORA_DEBUG AND TEST_APP04)
 # test4
 QT5_WRAP_CPP(TEST4_MOC_SOURCES
   tests/test4window.h
-  editor/tobaseeditor.h
-  editor/tohighlightededitor.h
-  editor/tomarkededitor.h  
+  widgets/tosearch.h
   editor/tomemoeditor.h
   editor/toscintilla.h
   editor/tosqltext.h
-  editor/tosyntaxanalyzernl.h
   editor/tosyntaxanalyzermysql.h
+  editor/tosyntaxanalyzernl.h
   editor/tosyntaxanalyzeroracle.h
   editor/tosyntaxanalyzerpostgresql.h
   tools/toresultstats.h
@@ -145,17 +139,15 @@ QT5_WRAP_CPP(TEST4_MOC_SOURCES
   )
 QT5_WRAP_UI(TEST4_UI_SOURCES tests/test4ui.ui)
 QT5_ADD_RESOURCES(TEST4_RC_SOURCES tests/test4.qrc)
-ADD_EXECUTABLE("test4"
+ADD_EXECUTABLE("test04"
   tests/test4.cpp
   tests/test4window.cpp
-  editor/tobaseeditor.cpp
-  editor/tohighlightededitor.cpp
-  editor/tomarkededitor.cpp
+  widgets/tosearch.cpp
   editor/tomemoeditor.cpp
   editor/toscintilla.cpp
   editor/tosqltext.cpp
-  editor/tosyntaxanalyzernl.cpp
   editor/tosyntaxanalyzermysql.cpp
+  editor/tosyntaxanalyzernl.cpp
   editor/tosyntaxanalyzeroracle.cpp
   editor/tosyntaxanalyzerpostgresql.cpp
   tools/toresultstats.cpp
@@ -169,7 +161,7 @@ ADD_EXECUTABLE("test4"
   ${WIDGETS_SOURCES} 
   ${LOGGING_SOURCES}
 )
-TARGET_LINK_LIBRARIES("test4"
+TARGET_LINK_LIBRARIES("test04"
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
@@ -179,46 +171,49 @@ TARGET_LINK_LIBRARIES("test4"
 	${TORA_QSCINTILLA_LIB}
 	${QSCINTILLA_LIBRARIES}	
 	${TORA_LOKI_LIB}
-	antlr3c
 )
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test4" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test04" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-SET_TARGET_PROPERTIES("test4" PROPERTIES ENABLE_EXPORTS ON)
-ENDIF(TORA_DEBUG AND TEST_APP4)
+SET_TARGET_PROPERTIES("test04" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP04)
 
-IF(TORA_DEBUG AND TEST_APP5)
+IF(TORA_DEBUG AND TEST_APP05)
 # test5
 QT5_WRAP_CPP(TEST5_MOC_SOURCES
   tests/test5window.h
-  editor/tomarkededitor.h
   result/toresulttabledata.h
   tools/tobrowserbasewidget.h
   tools/todescribe.h
   tools/toparamget.h
-  tools/toplsqleditor.h
-  tools/toplsqltext.h
   tools/toresultview.h
   tools/toresultcols.h
   tools/toresultdatasingle.h
   tools/toresulttableview.h
   tools/toresulttableviewedit.h
+  # tools
+  tools/toplsqleditor.h
+  tools/toplsqltext.h
+  tools/toworksheet.h
+  tools/toresultstats.h
+  tools/toresultplan.h
+  tools/tolinechart.h
+  tools/toresultbar.h
+  tools/tobarchart.h
 	)
-ADD_EXECUTABLE("test5"
+ADD_EXECUTABLE("test05"
   tests/test5.cpp
   tests/test5window.cpp
-  editor/tomarkededitor.cpp
   result/toresulttabledata.cpp
   tools/tobrowserbasewidget.cpp
   tools/todescribe.cpp
   tools/toparamget.cpp
-  tools/toplsqleditor.cpp
-  tools/toplsqltext.cpp
   tools/toresultcols.cpp
   tools/toresultview.cpp
   tools/toresultdatasingle.cpp
   tools/toresulttableview.cpp
   tools/toresulttableviewedit.cpp
+  tools/toresultplan.cpp
   ${TEST5_MOC_SOURCES}
   ${PCH_SOURCE}  
   ${CORE_SOURCES}   
@@ -226,8 +221,19 @@ ADD_EXECUTABLE("test5"
   ${WIDGETS_SOURCES}
   ${LOGGING_SOURCES}
   ${EDITOR_SOURCES}
+  ${ORACLE_SOURCES}
+  # worksheet tool deps
+  tools/toresultstats.cpp
+  tools/tolinechart.cpp
+  tools/tolinechart.cpp
+  tools/toresultbar.cpp
+  tools/tobarchart.cpp
+  tools/toworksheet.cpp
+  # pl/sql tool deps
+  tools/toplsqleditor.cpp
+  tools/toplsqltext.cpp
   )
-TARGET_LINK_LIBRARIES("test5"
+TARGET_LINK_LIBRARIES("test05"
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
@@ -237,35 +243,34 @@ TARGET_LINK_LIBRARIES("test5"
 	${TORA_LOKI_LIB}
 	${TORA_QSCINTILLA_LIB}
 	${QSCINTILLA_LIBRARIES}
-	antlr3c
 )
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test5" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test05" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-SET_TARGET_PROPERTIES("test5" PROPERTIES ENABLE_EXPORTS ON)
-ENDIF(TORA_DEBUG AND TEST_APP5)
+SET_TARGET_PROPERTIES("test05" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP05)
 
-IF(TORA_DEBUG AND TEST_APP6)
+IF(TORA_DEBUG AND TEST_APP06)
 # test6
-ADD_EXECUTABLE("test6" ${GUI_TYPE}
+ADD_EXECUTABLE("test06" ${GUI_TYPE}
   tests/test6.cpp
   ${PCH_SOURCE}
   )
-TARGET_LINK_LIBRARIES("test6"
+TARGET_LINK_LIBRARIES("test06"
 	ermodel
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
 )
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test6" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test06" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-SET_TARGET_PROPERTIES("test6" PROPERTIES ENABLE_EXPORTS ON)
-ENDIF(TORA_DEBUG AND TEST_APP6)
+SET_TARGET_PROPERTIES("test06" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP06)
 
-IF(TORA_DEBUG AND TEST_APP7)
+IF(TORA_DEBUG AND TEST_APP07)
 # test7
-ADD_EXECUTABLE("test7"
+ADD_EXECUTABLE("test07"
   tests/test7.cpp  
   ${PCH_SOURCE}
   ${CORE_SOURCES}
@@ -273,7 +278,7 @@ ADD_EXECUTABLE("test7"
   ${PARSING_SOURCES}
   ${LOGGING_SOURCES}  
   )
-TARGET_LINK_LIBRARIES("test7"
+TARGET_LINK_LIBRARIES("test07"
 	Qt5::Core
 	Qt5::Widgets
 	Qt5::Gui
@@ -282,11 +287,211 @@ TARGET_LINK_LIBRARIES("test7"
 	${TORA_LOKI_LIB}	
 	${TORA_QSCINTILLA_LIB}
 	${QSCINTILLA_LIBRARIES}
-	antlr3c
 )
 IF(PCH_DEFINED)
-  ADD_PRECOMPILED_HEADER("test7" ${PCH_HEADER} FORCEINCLUDE)
+  ADD_PRECOMPILED_HEADER("test07" ${PCH_HEADER} FORCEINCLUDE)
 ENDIF(PCH_DEFINED)
-SET_TARGET_PROPERTIES("test7" PROPERTIES ENABLE_EXPORTS ON)
-ENDIF(TORA_DEBUG AND TEST_APP7)
+SET_TARGET_PROPERTIES("test07" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP07)
 
+IF(TORA_DEBUG AND TEST_APP08)
+# test8
+QT5_WRAP_CPP(TEST8_MOC_SOURCES tests/test8.h)
+ADD_EXECUTABLE("test08"
+  tests/test8.cpp
+  ${TEST8_MOC_SOURCES}
+  ${PCH_SOURCE}
+  #${CORE_SOURCES}
+  #${LOGGING_SOURCES}  
+  )
+TARGET_LINK_LIBRARIES("test08"
+	Qt5::Core
+	Qt5::Widgets
+	Qt5::Gui
+	Qt5::Network
+	${CMAKE_DL_LIBS}
+)
+IF(PCH_DEFINED)
+  ADD_PRECOMPILED_HEADER("test08" ${PCH_HEADER} FORCEINCLUDE)
+ENDIF(PCH_DEFINED)
+SET_TARGET_PROPERTIES("test08" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP08)
+
+IF(TORA_DEBUG AND TEST_APP09)
+# test9
+QT5_WRAP_CPP(TEST9_MOC_SOURCES
+  tests/test9window.h  
+  editor/tomemoeditor.h
+  editor/toscintilla.h
+  editor/tosqltext.h
+  editor/todifftext.h  
+  editor/tosyntaxanalyzernl.h
+  editor/tosyntaxanalyzermysql.h
+  editor/tosyntaxanalyzeroracle.h
+  editor/tosyntaxanalyzerpostgresql.h
+  tools/toresultstats.h
+  tools/toresultview.h
+  )
+QT5_WRAP_UI(TEST9_UI_SOURCES tests/test9ui.ui)
+QT5_ADD_RESOURCES(TEST9_RC_SOURCES tests/test9.qrc)
+ADD_EXECUTABLE("test09"
+  tests/test9.cpp
+  tests/test9window.cpp
+  editor/tomemoeditor.cpp
+  editor/toscintilla.cpp
+  editor/tosqltext.cpp
+  editor/todifftext.cpp
+  editor/tosyntaxanalyzernl.cpp
+  editor/tosyntaxanalyzermysql.cpp
+  editor/tosyntaxanalyzeroracle.cpp
+  editor/tosyntaxanalyzerpostgresql.cpp
+  tools/toresultstats.cpp
+  tools/toresultview.cpp
+  ${TEST9_MOC_SOURCES}
+  ${TEST9_UI_SOURCES}
+  ${TEST9_RC_SOURCES}
+  ${PCH_SOURCE}  
+  ${CORE_SOURCES}    
+  ${PARSING_SOURCES} 
+  ${WIDGETS_SOURCES} 
+  ${LOGGING_SOURCES}
+)
+TARGET_LINK_LIBRARIES("test09"
+	Qt5::Core
+	Qt5::Widgets
+	Qt5::Gui
+	Qt5::Network
+	Qt5::PrintSupport
+	${CMAKE_DL_LIBS}
+	${TORA_QSCINTILLA_LIB}
+	${QSCINTILLA_LIBRARIES}	
+	${TORA_LOKI_LIB}
+)
+IF(PCH_DEFINED)
+  ADD_PRECOMPILED_HEADER("test09" ${PCH_HEADER} FORCEINCLUDE)
+ENDIF(PCH_DEFINED)
+SET_TARGET_PROPERTIES("test09" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP09)
+
+IF(TORA_DEBUG AND TEST_APP10)
+# test10
+ADD_EXECUTABLE("test10"
+  tests/test10.cpp
+  ${PCH_SOURCE}
+  ${CORE_SOURCES}
+  ${PARSING_SOURCES}
+  ${WIDGETS_SOURCES}
+  ${VIEWS_SOURCES}
+  ${RESULT_SOURCES}
+  ${EDITOR_SOURCES}
+  ${LOGGING_SOURCES}
+)
+TARGET_LINK_LIBRARIES("test10"
+	Qt5::Core
+	Qt5::Widgets
+	Qt5::Gui
+	Qt5::Network
+	Qt5::PrintSupport
+	${CMAKE_DL_LIBS}
+	${TORA_QSCINTILLA_LIB}
+	${QSCINTILLA_LIBRARIES}	
+	${TORA_LOKI_LIB}
+)
+IF(PCH_DEFINED)
+  ADD_PRECOMPILED_HEADER("test10" ${PCH_HEADER} FORCEINCLUDE)
+ENDIF(PCH_DEFINED)
+SET_TARGET_PROPERTIES("test10" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP10)
+
+IF(TORA_DEBUG AND TEST_APP11)
+# test11
+ADD_EXECUTABLE("test11"
+  tests/test11.cpp
+  ${PCH_SOURCE}
+  ${CORE_SOURCES}
+  ${WIDGETS_SOURCES}
+  ${PARSING_SOURCES}
+  ${LOGGING_SOURCES}
+  )
+TARGET_LINK_LIBRARIES("test11"
+	Qt5::Core
+	Qt5::Widgets
+	Qt5::Gui
+	Qt5::Network
+	${CMAKE_DL_LIBS}
+	${TORA_LOKI_LIB}
+	${TORA_QSCINTILLA_LIB}
+	${QSCINTILLA_LIBRARIES}
+	ermodel
+)
+IF(PCH_DEFINED)
+  ADD_PRECOMPILED_HEADER("test11" ${PCH_HEADER} FORCEINCLUDE)
+ENDIF(PCH_DEFINED)
+SET_TARGET_PROPERTIES("test11" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP11)
+
+IF(TORA_DEBUG AND TEST_APP12)
+# test12
+ADD_EXECUTABLE("test12"
+  tests/test12.cpp
+  ${PCH_SOURCE}
+  ${CORE_SOURCES}
+  ${WIDGETS_SOURCES}
+  ${PARSING_SOURCES}
+  ${LOGGING_SOURCES}
+  )
+TARGET_LINK_LIBRARIES("test12"
+	Qt5::Core
+	Qt5::Widgets
+	Qt5::Gui
+	Qt5::Network
+	${CMAKE_DL_LIBS}
+	${TORA_LOKI_LIB}
+	${TORA_QSCINTILLA_LIB}
+	${QSCINTILLA_LIBRARIES}
+)
+IF(PCH_DEFINED)
+  ADD_PRECOMPILED_HEADER("test12" ${PCH_HEADER} FORCEINCLUDE)
+ENDIF(PCH_DEFINED)
+SET_TARGET_PROPERTIES("test12" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP12)
+
+IF(TORA_DEBUG AND TEST_APP13)
+# test13
+QT5_ADD_RESOURCES(TEST13_RC_SOURCES tests/test13.qrc)
+QT5_WRAP_UI(TEST13_UI_SOURCES tests/test13ui.ui)
+QT5_WRAP_CPP(TEST13_MOC_SOURCES
+  widgets/tosearch.h
+  tests/test13window.h  
+  )
+ADD_EXECUTABLE("test13"
+  tests/test13.cpp
+  tests/test13window.cpp
+  widgets/tosearch.cpp
+  docklets/toastwalk.cpp
+  ${TEST13_MOC_SOURCES}
+  ${TEST13_UI_SOURCES}
+  ${TEST13_RC_SOURCES}
+  ${PCH_SOURCE}
+  ${CORE_SOURCES}  
+  ${WIDGETS_SOURCES}
+  ${EDITOR_SOURCES}  
+  ${PARSING_SOURCES}
+  ${LOGGING_SOURCES}
+  )
+TARGET_LINK_LIBRARIES("test13"
+	Qt5::Core
+	Qt5::Widgets
+	Qt5::Gui
+	Qt5::Network
+	${CMAKE_DL_LIBS}
+	${TORA_LOKI_LIB}
+	${TORA_QSCINTILLA_LIB}
+	${QSCINTILLA_LIBRARIES}
+	ermodel
+)
+IF(PCH_DEFINED)
+  ADD_PRECOMPILED_HEADER("test13" ${PCH_HEADER} FORCEINCLUDE)
+ENDIF(PCH_DEFINED)
+SET_TARGET_PROPERTIES("test13" PROPERTIES ENABLE_EXPORTS ON)
+ENDIF(TORA_DEBUG AND TEST_APP13)

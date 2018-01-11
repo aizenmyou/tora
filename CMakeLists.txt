@@ -23,18 +23,25 @@ OPTION(QT5_BUILD "Use Qt5" ON)
 OPTION(WANT_RPM "Enable additional RPM related stuff. Additional make package_rpm target" OFF)
 OPTION(USE_PCH "Use percompiled headers" OFF)
 OPTION(USE_EXPERIMENTAL "Use experimental code" OFF)
-OPTION(TEST_APP1 "Simple lexer test" OFF)
-OPTION(TEST_APP2 "toConnection/toQuery test" OFF)
-OPTION(TEST_APP3 "simple application - execute toWorksheet in a separate application" OFF)
-OPTION(TEST_APP4 "simple application - execute toHighlightedText in separate application" OFF)
-OPTION(TEST_APP5 "simple application - single tool(tabbed)" OFF)
-OPTION(TEST_APP6 "simple application parser(boost/spirit+.dot)" OFF)
-OPTION(TEST_APP7 "simple application parser" OFF)
+
+OPTION(TEST_APP01 "Simple lexer test" ON)
+OPTION(TEST_APP02 "toConnection/toQuery test" ON)
+OPTION(TEST_APP03 "simple application - execute toWorksheet in a separate application" ON)
+OPTION(TEST_APP04 "simple application - execute toHighlightedText in separate application" ON)
+OPTION(TEST_APP05 "simple application - single tool(tabbed)" ON)
+OPTION(TEST_APP06 "simple application parser(boost/spirit+.dot)" ON)
+OPTION(TEST_APP07 "simple application parser" ON)
+OPTION(TEST_APP08 "simple application - wget" ON)
+OPTION(TEST_APP09 "simple application - diff" ON)
+OPTION(TEST_APP10 "toCodeView" ON)
+OPTION(TEST_APP11 "simple parrser" ON)
+OPTION(TEST_APP12 "simple parrser" ON)
+OPTION(TEST_APP13 "parrser/indenter" ON)
 
 #Set our CMake minimum version
 #Require 2.4.2 for Qt finding
 #Require 2.4.3 for moc change detection and rpath updates for custom cairo install
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.11 FATAL_ERROR) # qt5 requirement
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1 FATAL_ERROR) # qt5 requirement
 #CMAKE_POLICY(SET CMP0046 OLD) # The dependency target "revisiontag" of target "tora" does not exist
 #CMAKE_POLICY(SET CMP0042 OLD) # MACOSX_RPATH
 
@@ -56,17 +63,19 @@ IF(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
   ADD_CUSTOM_TARGET(revisiontag ALL)
   # creates gitrevision.h using cmake script
   ADD_CUSTOM_COMMAND(TARGET revisiontag COMMAND ${CMAKE_COMMAND}
-  -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
   -DUSE_EXPERIMENTAL=${USE_EXPERIMENTAL}
   -DTARGET_NAME=revisiontag
-  -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/getgit.cmake)
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/getgit.cmake
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
   add_definitions("-DHAVE_GITREVISION_H=1")
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/getgit.cmake)
   set (VERSION ${GITVERSION_SHORT})
+  set (HAVE_GIT_VERSION 1)
 ELSE()
   #Set our version values (if not determined from git tag)
   SET (VERSION_MAJOR "3")
-  SET (VERSION_MINOR "0")
+  SET (VERSION_MINOR "2")
   #SET (VERSION_PATCH "0")
   #SET (VERSION_SUFFIX "")
   #SET (VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}${VERSION_SUFFIX})
@@ -109,7 +118,7 @@ ENDIF(APPLE)
 # Change this setting if you're compiling some test program(otherwise the test will SEGFAULT)
 IF(WIN32)
   SET(TORA_LIB ${EXE_NAME}) 
-  #SET(TORA_LIB test4)
+  #SET(TORA_LIB test5)
 ENDIF()
 
 # Ok, it has to be called after project is set. The we are sure we have size of void pointer set correctly...
@@ -121,24 +130,25 @@ SET(PLUGIN_PERMISSIONS WORLD_EXECUTE GROUP_EXECUTE OWNER_EXECUTE WORLD_READ GROU
 
 ##############################################################################################################
 ########## check for the CPU we build for                                                           ##########
-
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 IF (CMAKE_COMPILER_IS_GNUCC)
-  SET(CMAKE_CXX_FLAGS_DEBUG   "-Wall -std=c++11 -ggdb3 -O0 -fno-inline -rdynamic -fPIE")
-  SET(CMAKE_C_FLAGS_DEBUG     "-Wall            -ggdb3 -O0 -fno-inline -rdynamic -fPIE")
-  SET(CMAKE_CXX_FLAGS_RELEASE "-Wall -std=c++11 -ggdb3 -O2")
-  SET(CMAKE_C_FLAGS_RELEASE   "-Wall            -ggdb3 -O2")
-  SET(CMAKE_CXX_FLAGS         "-Wall -std=c++11 -ggdb3")
-  SET(CMAKE_C_FLAGS           "-Wall            -ggdb3")
+  SET(CMAKE_CXX_FLAGS_DEBUG   "-Wall -ggdb3 -O0 -fno-inline -rdynamic")
+  SET(CMAKE_C_FLAGS_DEBUG     "-Wall -ggdb3 -O0 -fno-inline -rdynamic")
+#   SET(CMAKE_CXX_FLAGS_RELEASE "-Wall -std=c++11 -ggdb3 -O2")
+#   SET(CMAKE_C_FLAGS_RELEASE   "-Wall            -ggdb3 -O2")
+#   SET(CMAKE_CXX_FLAGS         "-Wall -std=c++11 -ggdb3")
+#   SET(CMAKE_C_FLAGS           "-Wall            -ggdb3")
 ENDIF (CMAKE_COMPILER_IS_GNUCC)
 
 ## matches Linux Clang and also AppleClang
 IF (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  SET(CMAKE_CXX_FLAGS_DEBUG   "-Wall -std=c++11 -ggdb3 -O0 -fno-inline")
-  SET(CMAKE_C_FLAGS_DEBUG     "-Wall            -ggdb3 -O0 -fno-inline")
-  SET(CMAKE_CXX_FLAGS_RELEASE "-Wall -std=c++11 -ggdb3 -O2")
-  SET(CMAKE_C_FLAGS_RELEASE   "-Wall            -ggdb3 -O2")
-  SET(CMAKE_CXX_FLAGS         "-Wall -std=c++11 -ggdb3")
-  SET(CMAKE_C_FLAGS           "-Wall            -ggdb3")
+  SET(CMAKE_CXX_FLAGS_DEBUG   "-Wall -ggdb3 -O0 -fno-inline")
+  SET(CMAKE_C_FLAGS_DEBUG     "-Wall -ggdb3 -O0 -fno-inline")
+#   SET(CMAKE_CXX_FLAGS_RELEASE "-Wall -std=c++11 -ggdb3 -O2")
+#   SET(CMAKE_C_FLAGS_RELEASE   "-Wall            -ggdb3 -O2")
+#   SET(CMAKE_CXX_FLAGS         "-Wall -std=c++11 -ggdb3")
+#   SET(CMAKE_C_FLAGS           "-Wall            -ggdb3")
 ENDIF()
 
 #Convert our simpler command line option to the CMake style
@@ -221,15 +231,15 @@ IF(QT5_BUILD)
     LIST(APPEND QT_INCLUDES ${Qt5MacExtras_INCLUDE_DIRS})
   ENDIF()
   include_directories(${QT_INCLUDES})
-  SET(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
-  SET(CMAKE_C_FLAGS           "${CMAKE_C_FLAGS}   ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
-  STRING(TOUPPER "CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}" _flags_var_name)
-  SET(${_flags_var_name}      "${${_flags_var_name}} ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
-  SET("CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}" _flags_var_name)
-  # prevent error "You must build your code with position independent code if Qt was built with..
-  #if (Qt5_POSITION_INDEPENDENT_CODE)
-  #  SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
-  #endif()
+  # SET(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS}")
+  # SET(CMAKE_C_FLAGS           "${CMAKE_C_FLAGS}   ${Qt5Core_EXECUTABLE_COMPILE_FLAGS}")
+  # STRING(TOUPPER "CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}" _flags_var_name)
+  # SET(${_flags_var_name}      "${${_flags_var_name}} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS}")
+  # SET("CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}" _flags_var_name)
+  # # prevent error "You must build your code with position independent code if Qt was built with..
+  if (Qt5_POSITION_INDEPENDENT_CODE)
+    SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  endif()
 ELSE()
   SET (QT_MIN_VERSION "4.8.0")
   SET (QT_USE_QTSQL TRUE)

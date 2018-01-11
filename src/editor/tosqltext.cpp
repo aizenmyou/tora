@@ -45,11 +45,16 @@
 #include "editor/toworksheettext.h"
 #include "core/tosyntaxanalyzer.h"
 
+#include "parsing/tsqlparse.h"
+
+#include "icons/indent.xpm"
+
 #ifdef TORA_EXPERIMENTAL
 #include "parsing/tsqllexer.h"
 #include <QToolTip>
 #endif
 
+#include <QMenu>
 #include <QListWidget>
 #include <QVBoxLayout>
 #include <QApplication>
@@ -67,10 +72,12 @@ toSqlText::toSqlText(QWidget *parent, const char *name)
     , m_analyzerNL(NULL)
     , m_analyzerOracle(NULL)
     , m_analyzerMySQL(NULL)
-	, m_analyzerPostgreSQL(NULL)
+    , m_analyzerPostgreSQL(NULL)
     , m_parserTimer(new QTimer(this))
     , m_parserThread(new QThread(this))
     , m_haveFocus(true)
+    , m_wrap(new QAction("Wrap", this))
+    , m_indent(new QAction(QPixmap(const_cast<const char**>(indent_xpm)), "Indent", this))
 {
     using namespace ToConfiguration;
 #if defined(Q_OS_WIN)
@@ -107,10 +114,33 @@ toSqlText::toSqlText(QWidget *parent, const char *name)
     m_parserThread->start();
     setHighlighter(highlighterType);
     scheduleParsing();
+
+    m_indent->setCheckable(true);
+    m_indent->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_Backslash);
+    connect(m_indent, SIGNAL(triggered()), this, SLOT(indentCurrentSql()));
+
+    m_wrap->setCheckable(true);
+    connect(m_wrap, SIGNAL(toggled(bool)), this, SLOT(setWordWrap(bool)));
 }
 
 void toSqlText::keyPressEvent(QKeyEvent * e)
 {
+    // openscad's explanation:
+    // QScintilla hijacks all keyboard bindings, so any key bound both by QScintilla and the global menus will be shadowed by scintilla.
+    //
+    // Event configuration:
+    //
+    // Default keymap is created: MapDefault in KeyMap.cpp:81
+    // Ctrl-[a-z] (Mac: Cmd-[a-z]) is disabled (qscicommandset.cpp:869)
+    // Add key bindings from cmd_table in qscicommandset.cpp:55
+    //
+    // Event handling:
+    // QScintilla events are first handled in QsciScintilla::event(QEvent *e) (qscintilla.cpp:4129) -> this code overrides any global menu shortcuts if they're bound by qscintilla
+    // QScintilla events are handled in QsciScintillaBase::keyPressEvent(QKeyEvent *e) (qscintillabase.cpp:376) -> this triggers the actual qscintilla operation
+    // If event is not consumed, it bubbles up the event handler (widget) hierarchy
+    //
+    // "accept" all QKeyEvent(s) before QScintilla sees them
+
 #if TORA_INCREMENTAL_SEARCH
     //    if (Search)
     //    {
@@ -153,6 +183,16 @@ void toSqlText::keyPressEvent(QKeyEvent * e)
     //        }
     //    }
 #endif
+
+    // this case is even more special. m_indent QAction is owned by me (toSqlText, descendant of QScintilla)
+    // check if QKeyEvent matched QKeySequence and then call indent method directly
+    if (Utils::toCheckKeyEvent(e, m_indent->shortcut()))
+    {
+        indentCurrentSql();
+        e->accept();
+        return;
+    }
+
     super::keyPressEvent(e);
 }
 
@@ -265,13 +305,107 @@ void toSqlText::setHighlighter(HighlighterTypeEnum h)
     //update(); gets called by setFont
 }
 
+void toSqlText::indentCurrentSql() // slot
+{
+    Utils::toBusy busy;
+    using namespace SQLParser;
+    int cline, cpos;
+    getCursorPosition(&cline, &cpos);
+    toSyntaxAnalyzer::statement stat = analyzer()->getStatementAt(cline, cpos);
+    analyzer()->sanitizeStatement(stat);
+    try
+    {
+        std::unique_ptr <Statement> ast = StatementFactTwoParmSing::Instance().create("OracleDML", stat.sql, "");
+
+        Token const* root = ast->root();
+
+        TLOG(8, toNoDecorator, __HERE__) << root->toLispStringRecursive() << std::endl;
+
+        QList<SQLParser::Token const*> list;
+        indentPriv(root, list);
+
+        QString str;
+        foreach(Token const *t, list)
+        {
+            int d1 = t->depth();
+            int d2 = t->metadata().value("INDENT_DEPTH").toInt();
+            QString s = t->toString();
+            TLOG(8, toNoDecorator, __HERE__) << d1 << "\t" << d2 << "\t" << s << std::endl;
+            str.append(QString(d2, ' '));
+            str.append(s);
+            str.append("\n");
+        }
+
+        beginUndoAction();
+        setSelection(stat.posFrom, stat.posTo);
+        removeSelectedText();
+        insert(str);
+        endUndoAction();
+    } catch (...) {
+
+    }
+}
+
+void toSqlText::indentPriv(SQLParser::Token const* root, QList<SQLParser::Token const*> &list)
+{
+    using namespace SQLParser;
+    QRegExp white("^[ \\n\\r\\t]*$");
+
+    Token const*t = root;
+    unsigned depth = 0;
+    while(t->parent())
+    {
+        if (!white.exactMatch(t->toString()))
+            depth++;
+        t = t->parent();
+    }
+
+    QList<SQLParser::Token const*> me, pre, post;
+    foreach(Token const *t, root->prevTokens())
+    {
+        if (!white.exactMatch(t->toString()))
+        {
+	    t->metadata().insert("INDENT_DEPTH", depth);
+	    me.append(t);
+        }
+    }
+    if (!white.exactMatch(root->toString()))
+    {
+        root->metadata().insert("INDENT_DEPTH", depth);
+        me.append(root);
+    }
+    foreach(Token const* t, root->postTokens())
+    {
+        if (!white.exactMatch(t->toString()))
+        {
+            t->metadata().insert("INDENT_DEPTH", depth);
+            me.append(t);
+        }
+    }
+
+    foreach(QPointer<Token> child, root->getChildren())
+    {
+        Position child_position = child->getValidPosition();
+
+        if(child_position < root->getPosition())
+        {
+            indentPriv(child, pre);
+        } else {
+            indentPriv(child, post);
+        }
+    }
+    list.append(pre);
+    list.append(me);
+    list.append(post);
+}
+
 void toSqlText::setHighlighter(int h) // slot
 {
     QWidget *focus = qApp->focusWidget();
 
     if (focus == this)
         setHighlighter((HighlighterTypeEnum)h);
-    TLOG(9, toDecorator, __HERE__) << " for: " << focus->metaObject()->className() << std::endl;
+    TLOG(9, toDecorator, __HERE__) << " for: " << (focus ? focus->metaObject()->className() : QString("NULL")) << std::endl;
 }
 
 #ifdef QT_DEBUG
@@ -453,6 +587,14 @@ void toSqlText::focusOutEvent(QFocusEvent *e)
     super::focusOutEvent(e);
 }
 
+void toSqlText::populateContextMenu(QMenu *popup)
+{
+    popup->addAction(m_wrap);
+    popup->addAction(m_indent);
+    popup->addSeparator();
+    super::populateContextMenu(popup);
+}
+
 void toSqlText::scheduleParsing()
 {
     if (m_haveFocus && !m_parserTimer->isActive())
@@ -488,11 +630,11 @@ bool toSqlText::showToolTip(toSqlText::ToolTipData const& t)
 
     do
     {
-		if (i->getPosition().getLinePos() > offset)
-			break;
-		toolTipText  = i->getText();
-        toolTipText += i->getPosition().toString();
-        toolTipText += '(' + i->getTokenTypeName() + '/' + i->_mOrigTypeText + ')';
+	if (i->getPosition().getLinePos() > offset)
+	    break;
+	toolTipText  = i->getText();
+	toolTipText += i->getPosition().toString();
+	toolTipText += '(' + i->getTokenTypeName() + '/' + i->_mOrigTypeText + ')';
         i++;
     }
     while(i != lexer->end());
@@ -571,17 +713,12 @@ void toSqlTextWorker::setAnalyzer(toSyntaxAnalyzer *analyzer)
 }
 
 toHighlighterTypeButton::toHighlighterTypeButton(QWidget *parent, const char *name)
-    : toToggleButton(toSqlText::staticMetaObject.enumerator(toSqlText::staticMetaObject.indexOfEnumerator("HighlighterTypeEnum"))
-                     , parent
-                     , name
-                    )
+    : toToggleButton(ENUM_REF(toSqlText, HighlighterTypeEnum), parent, name)
 {
 }
 
 toHighlighterTypeButton::toHighlighterTypeButton()
-    : toToggleButton(toSqlText::staticMetaObject.enumerator(toSqlText::staticMetaObject.indexOfEnumerator("HighlighterTypeEnum"))
-                     , NULL
-                    )
+    : toToggleButton(ENUM_REF(toSqlText, HighlighterTypeEnum), NULL)
 {
 }
 

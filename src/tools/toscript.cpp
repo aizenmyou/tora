@@ -36,12 +36,14 @@
 #include "tools/toscript.h"
 #include "core/utils.h"
 #include "core/totool.h"
-//#include "core/toextract.h"
 #include "core/tomainwindow.h"
 //#include "core/toreport.h"
 #include "core/totextview.h"
-#include "editor/toworksheettext.h"
+#include "core/toextract.h"
+#include "core/toconfiguration.h"
+#include "editor/tosqltext.h"
 #include "tools/toscripttreeitem.h"
+#include "connection/tooracleconfiguration.h"
 
 #include <QScrollArea>
 #include <QMessageBox>
@@ -100,12 +102,10 @@ static toScriptTool ScriptTool;
 
 
 // aliases for basic tool modes
-#define MODE_COMPARE 0
-#define MODE_EXTRACT 1
-#define MODE_SEARCH 2
-#define MODE_MIGRATE 3
-#define MODE_REPORT 4
-
+static const int MODE_COMPARE = 0;
+static const int MODE_EXTRACT = 1;
+static const int MODE_SEARCH  = 2;
+static const int MODE_REPORT  = 4;
 
 toScript::toScript(QWidget *parent, toConnection &connection)
     : toToolWidget(ScriptTool, "script.html", parent, connection, "toScript")
@@ -145,7 +145,7 @@ toScript::toScript(QWidget *parent, toConnection &connection)
     vbox->setSpacing(0);
     vbox->setContentsMargins(0, 0, 0, 0);
     box->setLayout(vbox);
-    WorksheetText = new toWorksheetText(box);
+    WorksheetText = new toSqlText(box);
     vbox->addWidget(WorksheetText);
     SearchList = new toListView(box);
     vbox->addWidget(SearchList);
@@ -185,26 +185,14 @@ toScript::toScript(QWidget *parent, toConnection &connection)
     group->addButton(ScriptUI->Compare, MODE_COMPARE);
     group->addButton(ScriptUI->Extract, MODE_EXTRACT);
     group->addButton(ScriptUI->Search, MODE_SEARCH);
-    group->addButton(ScriptUI->Migrate, MODE_MIGRATE);
     group->addButton(ScriptUI->Report, MODE_REPORT);
 
-    ScriptUI->Initial->setTitle(tr("&Initial"));
-    ScriptUI->Limit->setTitle(tr("&Limit"));
-    ScriptUI->Next->setTitle(tr("&Next"));
     connect(group, SIGNAL(buttonClicked(int)), this, SLOT(changeMode(int)));
-    ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->ResizeTab), false);
-
-    // Remove when migrate and resize is implemented
-#if 1
-    ScriptUI->Migrate->hide();
-#endif
 
     ScriptUI->Source->setConnectionString(connection.description());
     ScriptUI->Destination->setConnectionString(connection.description());
 
     connect(ScriptUI->Browse, SIGNAL(clicked()), this, SLOT(browseFile()));
-    connect(ScriptUI->AddButton, SIGNAL(clicked()), this, SLOT(newSize()));
-    connect(ScriptUI->Remove, SIGNAL(clicked()), this, SLOT(removeSize()));
 
     ScriptUI->Schema->setCurrentIndex(0);
     setFocusProxy(ScriptUI->Tabs);
@@ -215,10 +203,10 @@ toScript::toScript(QWidget *parent, toConnection &connection)
     ScriptUI->Compare->setChecked(s.value("Compare", true).toBool());
     ScriptUI->Extract->setChecked(s.value("Extract", false).toBool());
     ScriptUI->Search->setChecked(s.value("Search", false).toBool());
-    ScriptUI->Migrate->setChecked(s.value("Migrate", false).toBool());
     ScriptUI->Report->setChecked(s.value("Report", false).toBool());
     // checkboxes - options
     ScriptUI->IncludeDDL->setChecked(s.value("IncludeDDL", true).toBool());
+    ScriptUI->UseDbmsMetadataBool->setChecked(toConfigurationNewSingle::Instance().option(ToConfiguration::Oracle::UseDbmsMetadataBool).toBool());
     ScriptUI->IncludeConstraints->setChecked(s.value("IncludeConstraints", true).toBool());
     ScriptUI->IncludeIndexes->setChecked(s.value("IncludeIndexes", true).toBool());
     ScriptUI->IncludeGrants->setChecked(s.value("IncludeGrants", true).toBool());
@@ -255,7 +243,6 @@ void toScript::closeEvent(QCloseEvent *event)
         s.setValue("Compare", ScriptUI->Compare->isChecked());
         s.setValue("Extract", ScriptUI->Extract->isChecked());
         s.setValue("Search", ScriptUI->Search->isChecked());
-        s.setValue("Migrate", ScriptUI->Migrate->isChecked());
         s.setValue("Report", ScriptUI->Report->isChecked());
         // checkboxes - options
         s.setValue("Report", ScriptUI->Report->isChecked());
@@ -285,18 +272,19 @@ void toScript::closeEvent(QCloseEvent *event)
         event->ignore();
 }
 
-std::list<QString> toScript::createObjectList(QItemSelectionModel * selections)
+toExtract::ObjectList toScript::createObjectList(QItemSelectionModel * selections)
 {
-    std::list<QString> lst;
+    using ObjectRef = toCache::ObjectRef;
+    ObjectList lst;
 
-    std::list<QString> otherGlobal;
-    std::list<QString> profiles;
-    std::list<QString> roles;
-    std::list<QString> tableSpace;
-    std::list<QString> tables;
-    std::list<QString> userOther;
-    std::list<QString> userViews;
-    std::list<QString> users;
+    ObjectList otherGlobal;
+    ObjectList profiles;
+    ObjectList roles;
+    ObjectList tableSpaces;
+    ObjectList tables;
+    ObjectList userOther;
+    ObjectList userViews;
+    ObjectList users;
 
     if (!selections->hasSelection())
         return lst;
@@ -305,49 +293,62 @@ std::list<QString> toScript::createObjectList(QItemSelectionModel * selections)
     foreach (QModelIndex i, selections->selectedIndexes())
     {
         item = static_cast<toScriptTreeItem*>(i.internalPointer());
-        Q_ASSERT_X(item, "toScript::createObjectList()",
-                   "fatal logic error - never shoudl go there");
-
-//         TLOG(2,toDecorator,__HERE__) << "selected: "<< item << item->schema() << item->data() << item->type();
+        Q_ASSERT_X(item, "toScript::createObjectList()", "fatal logic error - never should go there");
+        // TLOG(2,toDecorator,__HERE__) << "selected: "<< item << item->schema() << item->data() << item->type();
 
         if (item->type().isNull())
         {
             continue;
         }
+
         if (item->type() == "TABLESPACE")
-            Utils::toPush(tableSpace, item->type() + ":" + item->data());
+            tableSpaces.append(QPair<QString, ObjectRef>("TABLESPACE", ObjectRef("", item->data(), "")));
         else if (item->type() == "PROFILE")
-            Utils::toPush(profiles, item->type() + ":" + item->data());
+            profiles.append(QPair<QString, ObjectRef>("PROFILE", ObjectRef("", item->data(), "")));
         else if (item->type() == "ROLE")
-            Utils::toPush(roles, item->data());
+            roles.append(QPair<QString, ObjectRef>("ROLE", ObjectRef("", item->data(), "")));
         else if (item->type() == "USER")
-            Utils::toPush(users, item->data());
+            users.append(QPair<QString, ObjectRef>("USER", ObjectRef("", item->data(), "")));
         else if (item->type() == "TABLE")
-            Utils::toPush(tables, item->schema() + "." + item->data());
+            tables.append(QPair<QString, ObjectRef>("TABLE FAMILY", ObjectRef(item->schema(), item->data(), "")));
         else if (item->type() == "VIEW") // just to get it *after* tables
-            Utils::toPush(userViews, "VIEW:" + item->schema() + "." + item->data());
+            userViews.append(QPair<QString, ObjectRef>("VIEW", ObjectRef(item->schema(), item->data(), "")));
         else
             // the rest goes last (pkgs etc.)
-            Utils::toPush(userOther, item->type() + ":" + item->schema() + "." + item->data());
+            userOther.append(QPair<QString, ObjectRef>(item->type(), ObjectRef(item->schema(), item->data(), "")));
     }
 
     if (ScriptUI->IncludeDDL->isChecked())
     {
-        lst.insert(lst.end(), tableSpace.begin(), tableSpace.end());
-        lst.insert(lst.end(), profiles.begin(), profiles.end());
-        lst.insert(lst.end(), otherGlobal.begin(), otherGlobal.end());
-        for_each(roles.begin(), roles.end(), PrefixString(lst, QString::fromLatin1("ROLE:")));
-        for_each(users.begin(), users.end(), PrefixString(lst, QString::fromLatin1("USER:")));
-        for_each(tables.begin(), tables.end(), PrefixString(lst, QString::fromLatin1("TABLE FAMILY:")));
-        lst.insert(lst.end(), userViews.begin(), userViews.end());
-        lst.insert(lst.end(), userOther.begin(), userOther.end());
+        lst.append(tableSpaces);
+        lst.append(profiles);
+        lst.append(otherGlobal);
+        lst.append(roles);
+        lst.append(users);
+        lst.append(tables);
+        lst.append(userViews);
+        lst.append(userOther);
     }
-    for_each(tables.begin(), tables.end(), PrefixString(lst, QString::fromLatin1("TABLE CONTENTS:")));
+
+    foreach(auto i, tables)
+    {
+        lst.append(QPair<QString, ObjectRef>("TABLE CONTENTS", i.second));
+    }
+
     if (ScriptUI->IncludeDDL->isChecked())
     {
-        for_each(tables.begin(), tables.end(), PrefixString(lst, QString::fromLatin1("TABLE REFERENCES:")));
-        for_each(roles.begin(), roles.end(), PrefixString(lst, QString::fromLatin1("ROLE GRANTS:")));
-        for_each(users.begin(), users.end(), PrefixString(lst, QString::fromLatin1("USER GRANTS:")));
+        foreach(auto i, tables)
+        {
+            lst.append(QPair<QString, ObjectRef>("TABLE REFERENCES", i.second));
+        }
+        foreach(auto i, roles)
+        {
+            lst.append(QPair<QString, ObjectRef>("ROLE GRANTS", i.second));
+        }
+        foreach(auto i, users)
+        {
+            lst.append(QPair<QString, ObjectRef>("USER GRANTS", i.second));
+        }
     }
     return lst;
 }
@@ -361,8 +362,6 @@ void toScript::execute(void)
             mode = MODE_COMPARE;
         else if (ScriptUI->Extract->isChecked())
             mode = MODE_EXTRACT;
-        else if (ScriptUI->Migrate->isChecked())
-            mode = MODE_SEARCH;
         else if (ScriptUI->Search->isChecked())
             mode = MODE_SEARCH;
         else if (ScriptUI->Report->isChecked())
@@ -372,12 +371,12 @@ void toScript::execute(void)
             Utils::toStatusMessage(tr("No mode selected"));
             return ;
         }
-        std::list<QString> sourceObjects = createObjectList(ScriptUI->Source->objectList());
+        toExtract::ObjectList sourceObjects = createObjectList(ScriptUI->Source->objectList());
         std::list<QString> sourceDescription;
         std::list<QString> destinationDescription;
         QString script;
-#ifdef TORA3_EXTRACT
-        toExtract source(toMainWidget()->connection(ScriptUI->Source->connectionString()), this);
+
+        toExtract source(ScriptUI->Source->connection(), this);
         setupExtract(source);
 
         switch (mode)
@@ -442,11 +441,11 @@ void toScript::execute(void)
                     QTextStream pstream(&pfile);
 
                     QRegExp repl("\\W+");
-                    for (std::list<QString>::iterator i = sourceObjects.begin(); i != sourceObjects.end(); i++)
+                    for (auto i = sourceObjects.begin(); i != sourceObjects.end(); i++)
                     {
-                        std::list<QString> t;
-                        t.insert(t.end(), *i);
-                        QString fn = *i;
+                        toExtract::ObjectList t;
+                        t.append(*i);
+                        QString fn = QString("%1_%2").arg(i->first).arg(i->second.toString());
                         fn.replace(repl, "_");
                         fn += ".sql";
                         stream << "@" << fn << "\n";
@@ -477,7 +476,6 @@ void toScript::execute(void)
                 break;
             case MODE_COMPARE:
             case MODE_SEARCH:
-            case MODE_MIGRATE:
             case MODE_REPORT:
                 sourceDescription = source.describe(sourceObjects);
                 break;
@@ -485,8 +483,8 @@ void toScript::execute(void)
 
         if (ScriptUI->Destination->isEnabled())
         {
-            std::list<QString> destinationObjects  = createObjectList(ScriptUI->Destination->objectList());
-            toExtract destination(toMainWidget()->connection(ScriptUI->Destination->connectionString()), this);
+            ObjectList destinationObjects  = createObjectList(ScriptUI->Destination->objectList());
+            toExtract destination(ScriptUI->Destination->connection(), this);
             setupExtract(destination);
             switch (mode)
             {
@@ -496,27 +494,22 @@ void toScript::execute(void)
                     break;
                 case MODE_REPORT:
                 case MODE_EXTRACT:
-                case MODE_MIGRATE:
                     throw tr("Destination shouldn't be enabled now, internal error");
             }
 
             std::list<QString> drop;
             std::list<QString> create;
 
-            toExtract::srcDst2DropCreate(sourceDescription, destinationDescription,
-                                         drop, create);
+            toExtract::srcDst2DropCreate(sourceDescription, destinationDescription, drop, create);
             sourceDescription = drop;
             destinationDescription = create;
         }
-        ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->ResultTab),
-                                      mode == MODE_EXTRACT || mode == MODE_SEARCH || mode == MODE_MIGRATE || mode == MODE_REPORT);
-        ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->DifferenceTab),
-                                      mode == MODE_COMPARE || mode == MODE_SEARCH);
+        ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->ResultTab), mode == MODE_EXTRACT || mode == MODE_SEARCH || mode == MODE_REPORT);
+        ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->DifferenceTab), mode == MODE_COMPARE || mode == MODE_SEARCH);
         if (!script.isEmpty())
         {
-            WorksheetText->editor()->setText(script);
-            WorksheetText->editor()->setFilename(QString::null);
-            WorksheetText->editor()->setModified(true);
+            WorksheetText->setText(script);
+            WorksheetText->setModified(true);
         }
         if (mode == MODE_SEARCH)
         {
@@ -574,6 +567,7 @@ void toScript::execute(void)
             WorksheetText->hide();
             SearchList->hide();
             Report->show();
+#ifdef TORA_REPORT
             QString res = toGenerateReport(source.connection(), sourceDescription);
             Report->setText(res);
             if (ScriptUI->OutputFile->isChecked())
@@ -597,6 +591,7 @@ void toScript::execute(void)
                     }
                 }
             }
+#endif
         }
         else // TODO migrate
         {
@@ -606,7 +601,7 @@ void toScript::execute(void)
             fillDifference(sourceDescription, DropList);
             fillDifference(destinationDescription, CreateList);
         }
-#endif
+
         if (mode == MODE_COMPARE)
             ScriptUI->Tabs->setCurrentIndex(ScriptUI->Tabs->indexOf(ScriptUI->DifferenceTab));
         else
@@ -670,13 +665,8 @@ void toScript::changeMode(int mode)
 
     if (mode == MODE_COMPARE)
         ScriptUI->Destination->setEnabled(true);
-    else if (mode == MODE_EXTRACT || mode == MODE_MIGRATE || mode == MODE_REPORT || mode == MODE_SEARCH)
+    else if (mode == MODE_EXTRACT || mode == MODE_REPORT || mode == MODE_SEARCH)
         ScriptUI->Destination->setEnabled(false);
-
-    if (mode == MODE_EXTRACT)
-        ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->ResizeTab), true);
-    else if (mode == MODE_COMPARE || mode == MODE_MIGRATE || mode == MODE_REPORT || mode == MODE_SEARCH)
-        ScriptUI->Tabs->setTabEnabled(ScriptUI->Tabs->indexOf(ScriptUI->ResizeTab), false);
 
     ScriptUI->IncludeContent->setEnabled(mode == MODE_EXTRACT);
     ScriptUI->CommitDistance->setEnabled(mode == MODE_EXTRACT);
@@ -686,14 +676,13 @@ void toScript::changeMode(int mode)
         ScriptUI->IncludeHeader->setEnabled(true);
         ScriptUI->IncludePrompt->setEnabled(true);
     }
-    else if (mode == MODE_COMPARE || mode == MODE_MIGRATE || mode == MODE_REPORT || mode == MODE_SEARCH)
+    else if (mode == MODE_COMPARE || mode == MODE_REPORT || mode == MODE_SEARCH)
     {
         ScriptUI->IncludeHeader->setEnabled(false);
         ScriptUI->IncludePrompt->setEnabled(false);
     }
 
-    if (mode == MODE_COMPARE || mode == MODE_SEARCH
-            || mode == MODE_MIGRATE || mode == MODE_REPORT)
+    if (mode == MODE_COMPARE || mode == MODE_SEARCH || mode == MODE_REPORT)
     {
         ScriptUI->IncludeDDL->setEnabled(false);
         ScriptUI->IncludeDDL->setChecked(true);
@@ -708,9 +697,9 @@ void toScript::changeMode(int mode)
     ScriptUI->IncludeConstraints->setEnabled(ScriptUI->IncludeDDL->isChecked());
     ScriptUI->IncludeIndexes->setEnabled(ScriptUI->IncludeDDL->isChecked());
     ScriptUI->IncludeGrants->setEnabled(ScriptUI->IncludeDDL->isChecked());
-    ScriptUI->IncludeStorage->setEnabled(ScriptUI->IncludeDDL->isChecked() && mode != MODE_MIGRATE);
-    ScriptUI->IncludeParallell->setEnabled(ScriptUI->IncludeDDL->isChecked() && mode != MODE_MIGRATE);
-    ScriptUI->IncludePartition->setEnabled(ScriptUI->IncludeDDL->isChecked() && mode != MODE_MIGRATE);
+    ScriptUI->IncludeStorage->setEnabled(ScriptUI->IncludeDDL->isChecked());
+    ScriptUI->IncludeParallell->setEnabled(ScriptUI->IncludeDDL->isChecked());
+    ScriptUI->IncludePartition->setEnabled(ScriptUI->IncludeDDL->isChecked());
     ScriptUI->IncludeCode->setEnabled(ScriptUI->IncludeDDL->isChecked());
     ScriptUI->IncludeComment->setEnabled(ScriptUI->IncludeDDL->isChecked());
 }
@@ -726,34 +715,6 @@ void toScript::keepOn(toTreeWidgetItem *parent)
     pchk->setOn(true);
 }
 
-void toScript::newSize(void)
-{
-    QString init = ScriptUI->Initial->sizeString();
-    QString next = ScriptUI->Next->sizeString();
-    QString max = ScriptUI->Limit->sizeString();
-    QString maxNum;
-    maxNum.sprintf("%010d", ScriptUI->Limit->value());
-
-    for (toTreeWidgetItem *item = ScriptUI->Sizes->firstChild(); item; item = item->nextSibling())
-        if (max == item->text(0))
-        {
-            Utils::toStatusMessage(tr("Replacing existing size with new"), false, false);
-            delete item;
-            break;
-        }
-
-    new toTreeWidgetItem(ScriptUI->Sizes, max, init, next, maxNum);
-    ScriptUI->Sizes->setSorting(3);
-}
-
-void toScript::removeSize(void)
-{
-    toTreeWidgetItem *item = ScriptUI->Sizes->selectedItem();
-    if (item)
-        delete item;
-}
-
-#ifdef TORA3_EXTRACT
 void toScript::setupExtract(toExtract &extr)
 {
     extr.setCode (ScriptUI->IncludeCode->isEnabled() &&
@@ -787,27 +748,7 @@ void toScript::setupExtract(toExtract &extr)
     else
         extr.setSchema(ScriptUI->Schema->currentText());
 
-    if (ScriptUI->DontResize->isChecked())
-        extr.setResize(QString::null);
-    else if (ScriptUI->AutoResize->isChecked())
-        extr.setResize(QString::fromLatin1("1"));
-    else
-    {
-        QString siz;
-        for (toTreeWidgetItem *item = ScriptUI->Sizes->firstChild(); item; item = item->nextSibling())
-        {
-            siz += item->text(0);
-            siz += QString::fromLatin1(":");
-            siz += item->text(1);
-            siz += QString::fromLatin1(":");
-            siz += item->text(2);
-            if (item->nextSibling())
-                siz += QString::fromLatin1(":");
-        }
-        extr.setResize(siz);
-    }
 }
-#endif
 
 void toScript::browseFile(void)
 {

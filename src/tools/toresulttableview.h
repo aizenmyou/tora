@@ -62,7 +62,9 @@ class toSearchReplace;
 
 class toResultTableView : public QTableView, public toResult, public toEditWidget
 {
-        Q_OBJECT;
+    Q_OBJECT;
+    typedef QTableView super;
+
     public:
 
         typedef toTableViewIterator iterator;
@@ -186,11 +188,6 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
         bool editSave(bool askfile) override;
 
         /**
-         * Print this widgets contents.
-         */
-        void editPrint(void) override;
-
-        /**
          * Perform copy.
          */
         void editCopy(void) override;
@@ -207,9 +204,9 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
 	void editCut()  override {}
 	void editPaste() override {}
 	void editReadAll() override {}
-	bool searchNext() override { return false; };
-        void searchReplace() override {};
 	QString editText() override { return ""; }
+
+	bool handleSearching(QString const& search, QString const& replace, Search::SearchFlags flags) override;
 
         /** Fill in result from the cache rather than executing actual query on database.
          */
@@ -257,15 +254,6 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
     signals:
 
         /**
-         * Called before the menu is displayed so that you can add items
-         * to it before it is shown.
-         *
-         * @param menu Pointer to the menu about to be shown.
-         */
-        void displayMenu(QMenu *menu);
-
-
-        /**
          * Emitted when table's selection changes
          */
         void selectionChanged(void);
@@ -292,7 +280,6 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
         void modelChanged(toResultModel*);
 
     protected slots:
-        void slotDisplayMenu(const QPoint &pos);
         void slotMenuCallback(QAction *action);
         void slotHandleDone(void);
         void slotHandleReset(void);
@@ -307,7 +294,13 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
         virtual void slotApplyColumnRules(void);
 
     protected:
-        void createActions(void);
+        //! \reimp
+        void focusInEvent(QFocusEvent *e) override;
+
+        //! \reimp
+        void focusOutEvent(QFocusEvent *e) override;
+
+        void contextMenuEvent(QContextMenuEvent *e) override;
 
         /*! \brief Common setup function called from constructors
         */
@@ -390,7 +383,6 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
         /**
          * context menu items. may be null
          */
-        QMenu   *Menu;
         QAction *displayAct;
         QAction *refreshAct;
         QAction *leftAct;
@@ -401,7 +393,6 @@ class toResultTableView : public QTableView, public toResult, public toEditWidge
         QAction *copyTransAct;
         QAction *selectAllAct;
         QAction *exportAct;
-        QAction *editAct;
         QAction *rowCountAct;
         QAction *readAllAct;
 };

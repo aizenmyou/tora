@@ -52,6 +52,10 @@ QVariant ToConfiguration::Editor::defaultValue(int option) const
             return QVariant((int) 0);
         case EditorTypeInt:
             return QVariant((int) 0);
+        case CaretLineBool:
+            return QVariant((bool) true);
+        case CaretLineAlphaInt:
+            return QVariant((int) 50);
         case UseMaxTextWidthMarkBool:
             return QVariant((bool) false);
         case MaxTextWidthMarkInt:
@@ -59,9 +63,9 @@ QVariant ToConfiguration::Editor::defaultValue(int option) const
         case KeywordUpperBool:
             return QVariant((bool) false);
         case ObjectNamesUpperBool:
-            return QVariant((bool) false);
+            return QVariant((bool) true);
         case CodeCompleteBool:
-            return QVariant((bool) false);
+            return QVariant((bool) true);
         case CompleteSortBool:
             return QVariant((bool) true);
         case CodeCompleteDelayInt:
@@ -69,7 +73,20 @@ QVariant ToConfiguration::Editor::defaultValue(int option) const
         case UseEditorShortcutsBool:
             return QVariant((bool) false);
         case EditorShortcutsMap:
-            return QVariant(QMap<QString, QVariant>());
+            return QVariant(QMap<QString, QVariant>
+            {
+                {"SE", "SELECT"},
+                {"se", "select"},
+                {"FR", "FROM"},
+                {"fr", "from"},
+                {"WH", "WHERE"},
+                {"wh", "where"},
+                {"GR", "GROUP"},
+                {"gr", "group"},
+                {"OR", "ORDER"},
+                {"or", "order"}
+            }
+            );
         case AutoIndentBool:
             return QVariant((bool) true);
         case UseSpacesForIndentBool:

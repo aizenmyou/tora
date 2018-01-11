@@ -37,12 +37,17 @@
 #include "widgets/totoolwidget.h"
 #include "ui_toscriptui.h"
 
+#include "core/tocache.h"
+#include "core/toextract.h"
+
 #include <list>
 #include <algorithm>
 
 class toExtract;
 class toListView;
-class toWorksheetText;
+class toSqlText;
+class toTreeWidget;
+class toTreeWidgetItem;
 class toTextView;
 
 
@@ -58,7 +63,7 @@ class toScript : public toToolWidget
 
         Ui::toScriptUI *ScriptUI;
         //! Additional widget/Tab widget. DDL scripts container.
-        toWorksheetText *WorksheetText;
+        toSqlText *WorksheetText;
         //! Result lists for its action
         toListView *DropList;
         toListView *CreateList;
@@ -74,7 +79,7 @@ class toScript : public toToolWidget
         /*! Create commin string list with all selected objects
         for given objects selection
         */
-        std::list<QString> createObjectList(QItemSelectionModel * selections);
+        toExtract::ObjectList createObjectList(QItemSelectionModel * selections);
 
         void fillDifference(std::list<QString> &objects, toTreeWidget *list);
 
@@ -93,6 +98,8 @@ class toScript : public toToolWidget
         void closeEvent(QCloseEvent *event);
 
     public:
+        typedef QList<QPair<QString,toCache::ObjectRef> > ObjectList;
+
         toScript(QWidget *parent, toConnection &connection);
         virtual ~toScript();
 
@@ -104,11 +111,6 @@ class toScript : public toToolWidget
         void changeMode(int);
 
         void keepOn(toTreeWidgetItem *item);
-
-        //! Size tab - add new item
-        void newSize(void);
-        //! Size tab - remove current item
-        void removeSize(void);
 
         /*! Ask user for output location. A file or a directory.
         It's stored in ScriptUI->Filename then

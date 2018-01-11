@@ -42,7 +42,6 @@
 #include "core/tochangeconnection.h"
 #include "core/tocodemodel.h"
 #include "core/toeventquery.h"
-#include "editor/tohighlightededitor.h"
 #include "editor/tosqltext.h"
 
 #include "icons/unittest.xpm"
@@ -52,6 +51,8 @@
 #include <QSplitter>
 #include <QToolBar>
 #include <QTreeView>
+#include <QLayout>
+
 #include "toresulttableview.h"
 
 // helper definitons for SQLPackageParams and SQLUnitParams columns
@@ -186,7 +187,7 @@ toUnitTest::toUnitTest(QWidget * parent, toConnection &connection)
     codeSplitter->addWidget(codeList);
     codeSplitter->addWidget(packageList);
 
-    editor = new toHighlightedEditor(splitter, "UTworksheet");
+    editor = new toSqlText(splitter, "UTworksheet");
 
     splitter->addWidget(codeSplitter);
     splitter->addWidget(editor);
@@ -248,7 +249,7 @@ void toUnitTest::slotChangePackage(const QModelIndex &current)
 {
     Utils::toBusy busy;
 
-    editor->editor()->setText("-- select PL/SQL unit, please.");
+    editor->setText("-- select PL/SQL unit, please.");
 
     toCodeModelItem *item = static_cast<toCodeModelItem*>(current.internalPointer());
     if (item && item->parent())
@@ -288,7 +289,7 @@ void toUnitTest::slotPackageListSelectionChanged()
         params << m_owner;
         params << m_name;
     }
-    editor->editor()->setText("-- getting the script...");
+    editor->setText("-- getting the script...");
     try
     {
         toConnectionSubLoan conn(toToolWidget::connection());
@@ -432,5 +433,5 @@ void toUnitTest::slotHandleDone()
 
     res.append("\nEND;\n");
 
-    editor->editor()->setText(res.join("\n").replace("\t", "    "));
+    editor->setText(res.join("\n").replace("\t", "    "));
 }

@@ -83,7 +83,7 @@ int main(int argc, char **argv)
      */
     QCoreApplication::setAttribute(Qt::AA_X11InitThreads); //  or just XInitThreads();
     QNetworkProxyFactory::setUseSystemConfiguration(true);
-    toConfigurationNew::setQSettingsEnv();
+    toConfiguration::setQSettingsEnv();
 
     /*! \warning: Keep the code before QApplication init as small
         as possible. There could be serious display issues when
@@ -152,8 +152,6 @@ int main(int argc, char **argv)
         {
             toSplash splash(NULL);
             splash.show();
-
-            toUpdaterSingle::Instance().check(/*force=>*/false);
 
             QList<QString> plugins;
 #ifdef Q_OS_WIN
@@ -342,7 +340,7 @@ int main(int argc, char **argv)
 
         if (toConfigurationNewSingle::Instance().option(ToConfiguration::Main::LastVersion).toString() != TORAVERSION)
         {
-            toAbout about(NULL, "About " TOAPPNAME, true);
+            toAbout about(NULL, "About " TOAPPNAME, true, 4);
             if (!about.exec())
                 exit (2);
             toConfigurationNewSingle::Instance().setOption(ToConfiguration::Main::LastVersion, QString(TORAVERSION));

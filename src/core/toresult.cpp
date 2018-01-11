@@ -55,14 +55,7 @@ void toResultObject::setup(void)
         Utils::toStatusMessage(tr("Internal error, toResult is not a descendant of toResult"));
         return ;
     }
-    try
-    {
-        QObject::connect(toToolWidget::currentTool(obj), SIGNAL(connectionChange()), this, SLOT(slotConnectionChanged()));
-    }
-    catch (...)
-    {
-        TLOG(1, toDecorator, __HERE__) << "	Ignored exception." << std::endl;
-    }
+    QObject::connect(toToolWidget::currentTool(obj), SIGNAL(connectionChange()), this, SLOT(slotConnectionChanged()));
     try
     {
         if (Result->Handled)
@@ -88,7 +81,7 @@ toResult::toResult()
     , RelatedAction(NULL)
 {
     //see EventDispatcherWin32Private::registerTimer time should be either 0 or >20
-    //otherwise the application hungs windows - bacause QT starts a new thread with RT priority
+    //otherwise the application hungs windows - because QT starts a new thread with RT priority
     //
     // Few more comments on this:
     //  - Tora uses multiple inheritance(subclass of the toResult also inherits from QWidget)
@@ -243,40 +236,8 @@ bool toResult::setSqlAndParams(const QString &sql, toQueryParams const& par)
     if (toConfigurationNewSingle::Instance().option(ToConfiguration::Main::DontReread).toBool() && SQL == sql && Params == par && force == false)
         return false;
 
-    // Enter the inner loop if and only if the NeedsRefresh was false
-    /*
-      NOTE: it code is here just to prove that QT's container's iterators are sick
-      result of compassion between const and non-const iterator is undefined
-      uncomment this is you think that this function gives unpredictable results.
-    */
-    // if (toConfigurationSingle::Instance().dontReread() && force == false)
-    // {
-    // 	    if (SQL == sql && par.size() == Params.size())
-
-    // 	    {
-    // 		    bool c = par == Params;
-    // 		    int ii = par.size();
-    // 		    int jj = Params.size();
-    // 		    toQueryParams::const_iterator i = par.constBegin();
-    // 		    toQueryParams::const_iterator j = Params.constBegin();
-    // 		    while (i != par.constEnd() && j != Params.constEnd())
-    // 		    {
-    // 			    QString si(*i);
-    // 			    QString sj(*j);
-    // 			    if (QString(*i) != QString(*j))
-    // 				    break;
-    // 			    i++;
-    // 			    j++;
-    // 		    }
-    // 		    bool c1 = i == par.constEnd();
-    // 		    bool c2 = j == Params.constEnd();
-    // 		    if (i == par.constEnd() && j == Params.constEnd())
-    // 			    return force;
-    // 	    }
-    // }
     SQL = sql;
-    Params = par;
-    QueryReady = true;
+    setParams(par);
     return true;
 }
 
@@ -299,6 +260,10 @@ void toResult::changeHandle(void)
         return;
 
     widget->setEnabled(handled());
+
+    QString name = widget->objectName();
+    TLOG(1, toNoDecorator, __HERE__) << " Disabling object: " << name << " " << handled() << std::endl;
+
 
     // find totabwidget
     QWidget *parent = widget;

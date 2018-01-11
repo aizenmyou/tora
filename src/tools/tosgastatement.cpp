@@ -41,9 +41,13 @@
 #include "core/toconfiguration.h"
 #include "core/utils.h"
 #include "editor/toscintilla.h"
-#include "toresultfield.h"
-#include "toresultplan.h"
-#include "toresulttableview.h"
+#include "tools/toresultplan.h"
+#include "tools/toresulttableview.h"
+
+#include "result/toresultplan.h"
+#include "result/toresultsql.h"
+
+#include "views/toplantablesview.h"
 
 static toSQL SQLParsingSchema(
     "toSGAStatement:ParsingSchema",
@@ -80,17 +84,24 @@ static toSQL SQLPlanHistory("toSGATrace:PlanHistory",
 		" order by 1, 2, 3                                                                             ",
 		"Display sql plan history");
 
-toSGAStatement::toSGAStatement(QWidget *parent)
+toSGAStatement::toSGAStatement(QWidget *parent, const char* name)
     : QTabWidget(parent)
 {
+    if (name)
+        setObjectName(name);
 
-    SQLText = new toResultField(this);
-    addTab(SQLText, tr("SQL"));
+    SQLText = new toResultSql(this);
+    SQLText->setSQLName("Global:SQLTextSQLID");
+    addTab(SQLText->view(), tr("SQL"));
 
     if (toConnection::currentConnection(this).providerIs("Oracle"))
     {
     	Plan = new toResultPlanCursor(this);
         addTab(Plan, tr("Execution plan"));
+
+        PlanNew = new toResultPlanNew(this, name);
+        addTab(PlanNew, tr("Execution plan Text"));
+
         Resources = new toResultResources(this);
         addTab(Resources, tr("Information"));
 
@@ -100,49 +111,39 @@ toSGAStatement::toSGAStatement(QWidget *parent)
         PlanHistory->setSQL(SQLPlanHistory);
         PlanHistory->setReadAll(true);
         addTab(PlanHistory, tr("Plan History"));
+
+        SQLTables = new toPlanTablesView(this);
+        SQLTables->setObjectName("toSQLTablesView");
+        addTab(SQLTables->view(), tr("Tables"));
     }
     else
         QTabWidget::tabBar()->hide();
 
     connect(this, SIGNAL(currentChanged(int)),
             this, SLOT(changeTab(int)));
-    CurrentTab = SQLText;
+    CurrentTab = SQLText->view();
 }
 
 void toSGAStatement::changeTab(int index)
 {
     if (Address.isEmpty() || Address == QString::fromLatin1("00:0"))
-    	return;
+        return;
 
     CurrentTab = QTabWidget::widget(index);
     try
     {
-    	if (CurrentTab == SQLText)
-    	{
-    		QString sql;
-    		toConnection &conn = toConnection::currentConnection(this);
-
-    		if (conn.providerIs("Oracle"))
-    			sql = Utils::toSQLString(conn, Address);
-    		else if (conn.providerIs("QPSQL"))
-    		{
-    			toQList vals = toQuery::readQuery(conn, SQLBackendSql, toQueryParams() << Address);
-
-    			for (toQList::iterator i = vals.begin(); i != vals.end(); i++)
-    				sql.append((QString)*i);
-    		}
-
-    		// TODO: toSQLParse disabled
-    		// if (toConfigurationSingle::Instance().autoIndent())
-    		// sql = toSQLParse::indent(sql);
-    		SQLText->sciEditor()->setText(sql);
-    	}
-    	else if (CurrentTab == Plan)
-    		Plan->queryCursorPlan(toQueryParams() << Address << Cursor);
-    	else if (CurrentTab == Resources)
+        if (CurrentTab == SQLText->view())
+            SQLText->refreshWithParams(toQueryParams() << Address);
+        else if (CurrentTab == Plan)
+            Plan->queryCursorPlan(toQueryParams() << Address << ChildNumber);
+        else if (CurrentTab == PlanNew)
+            PlanNew->refreshWithParams(toQueryParams() << Address << ChildNumber);
+        else if (CurrentTab == Resources)
             Resources->refreshWithParams(toQueryParams() << Address);
-    	else if (CurrentTab == PlanHistory)
-    		PlanHistory->refreshWithParams(toQueryParams() << Address);
+        else if (CurrentTab == PlanHistory)
+            PlanHistory->refreshWithParams(toQueryParams() << Address);
+        else if (CurrentTab == SQLTables->view())
+            SQLTables->refreshWithParams(toQueryParams() << Address << ChildNumber);
     }
     TOCATCH;
 }
@@ -151,6 +152,6 @@ void toSGAStatement::changeAddress(toQueryParams const& sqlid)
 {
     Q_ASSERT_X( sqlid.size() == 2, qPrintable(__QHERE__), "Expecting sql_id + child_id");
     Address = sqlid[0];
-    Cursor  = sqlid[1];
+    ChildNumber  = sqlid[1];
     changeTab(QTabWidget::indexOf(CurrentTab));
 }

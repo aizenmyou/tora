@@ -266,5 +266,8 @@
         <file>widgets/LICENSE.ANTLR.txt</file>
         <file>widgets/LICENSE.KGraphViewer.txt</file>
         <file>widgets/LICENSE.ExtendedTabs.txt</file>
+        <file>widgets/LICENSE.dtl.txt</file>
+
+        <file>../NEWS</file>
     </qresource>
 </RCC>

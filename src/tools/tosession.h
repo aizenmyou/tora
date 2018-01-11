@@ -57,6 +57,7 @@ class toResultBar;
 class toResultSchema;
 class toResultItem;
 class toResultLock;
+class toResultLockNew;
 class toResultStats;
 class toResultTableView;
 class toSGAStatement;

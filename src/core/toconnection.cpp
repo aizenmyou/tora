@@ -1,4 +1,3 @@
-
 /* BEGIN_COMMON_COPYRIGHT_HEADER
  *
  * TOra - An Oracle Toolkit for DBA's and developers
@@ -96,6 +95,7 @@ toConnection::toConnection(const toConnectionOptions &opts)
     , Password(opts.password)
     , Host(opts.host)
     , Database(opts.database)
+    , Version("0000")
     , Color(opts.color)
     , Options(opts.options)
     , pConnectionImpl(NULL)
@@ -113,14 +113,14 @@ toConnection::toConnection(const toConnectionOptions &opts)
 
     setDefaultSchema(opts.schema);
 
-    pCache = new toCache(*this, description(false).trimmed());
-
-    ////Version = connSub->version();
+    if(!ConnectionOptions.options.contains("TEST"))
     {
+        pCache = new toCache(*this, description(false).trimmed());
+        ////Version = connSub->version();
+
         QMutexLocker clock(&ConnectionLock);
         if (toConfigurationNewSingle::Instance().option(ToConfiguration::Database::ObjectCacheInt) == toCache::ON_CONNECT)
             pCache->readCache();
-
     }
 }
 
@@ -271,7 +271,7 @@ void toConnection::delWidget(QWidget *widget)
 #ifdef QT_DEBUG
     // Cross check tools connections against connections widgets
     // Iterate over all the tool windows, increment the counter for every tool using this toConnection instance
-    unsigned toolCnt = 0;
+    QSet<QWidget*>::size_type toolCnt = 0;
     QList<toToolWidget*> tools = toWorkSpaceSingle::Instance().toolWindowList();
     Q_FOREACH(toToolWidget *tool, tools)
     {
@@ -289,7 +289,7 @@ void toConnection::addWidget(QWidget *widget)
 #ifdef QT_DEBUG
     // Cross check tools connections against connections widgets
     // Iterate over all the tool windows, increment the counter for every tool using this instance
-    unsigned toolCnt = 0;
+    QSet<QWidget*>::size_type toolCnt = 0;
     QList<toToolWidget*> tools = toWorkSpaceSingle::Instance().toolWindowList();
     Q_FOREACH(toToolWidget *tool, tools)
     {
@@ -507,14 +507,16 @@ void toConnection::putBackSub(toConnectionSub *conn)
 
 void toConnection::allExecute(QString const& sql)
 {
+#if 0
     try
     {
         Q_FOREACH(toConnectionSub *con, Connections)
         {
             //TODO
-            //toQuery q(*con, sql, toQueryParams());
-            //q.eof();
+            toQuery q(*con, sql, toQueryParams());
+            q.eof();
         }
     }
     TOCATCH
+#endif
 }

@@ -75,7 +75,6 @@ private:
 
 	QNetworkAccessManager* createQNAM();
 	QUrl redirectUrl(const QUrl& possibleRedirectUrl);
-	void clear(QNetworkReply *reply);
 };
 
 class toUpdaterSingle: public ::Loki::SingletonHolder<toUpdater, Loki::CreateUsingNew, Loki::NoDestroy> {};

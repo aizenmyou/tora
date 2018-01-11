@@ -819,6 +819,8 @@ void toCache::clearCache()
         return PACKAGE;
     else if (objType == "PACKAGE BODY")
         return PACKAGE_BODY;
+    else if (objType == "PACKAGE_BODY")
+        return PACKAGE_BODY;
     else if (objType == "INDEX")
         return INDEX;
     else if (objType == "SEQUENCE")
@@ -909,6 +911,18 @@ bool toCache::CacheEntry::operator ==(const toCache::CacheEntry &other) const
     return type == other.type && name == other.name;
 }
 ;
+
+QDataStream& operator<<(QDataStream& stream, const toCache::ObjectRef& o)
+{
+    stream << o.first << o.second;
+    return stream;
+}
+
+QDataStream& operator>>(QDataStream& stream, toCache::ObjectRef& o)
+{
+    stream >> o.first >> o.second;
+    return stream;
+}
 
 QDataStream& operator<<(QDataStream& stream, const toCache::CacheEntry& e)
 {

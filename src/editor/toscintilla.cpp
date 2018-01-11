@@ -33,16 +33,20 @@
  * END_COMMON_COPYRIGHT_HEADER */
 
 #include "editor/toscintilla.h"
-#include "editor/toworksheettext.h"
+#include "core/toeditorconfiguration.h"
 #include "core/toconfiguration.h"
 #include "core/toglobalevent.h"
 #include "core/tologger.h"
 #include "core/tomainwindow.h"
 #include "core/toconf.h"
+#include "core/tocontextmenu.h"
+#include "core/toeditmenu.h"
+#include "widgets/tosearch.h"
+
+#include "ts_log/ts_log_utils.h"
 
 #include <QApplication>
 #include <QtGui/QClipboard>
-#include <QPrintDialog>
 #include <QtXml/QDomDocument>
 #include <QShortcut>
 #include <QtCore/QtDebug>
@@ -51,18 +55,8 @@
 #include <QtCore/QMimeData>
 #include <QToolTip>
 
-#include <Qsci/qsciprinter.h>
 #include <Qsci/qscilexersql.h>
 #include "core/tostyle.h"
-
-#include "icons/undo.xpm"
-#include "icons/redo.xpm"
-#include "icons/copy.xpm"
-#include "icons/cut.xpm"
-#include "icons/paste.xpm"
-
-
-#define ACCEL_KEY(k) "\t" + QString("Ctrl+" #k)
 
 void QSciMessage::notify()
 {
@@ -111,6 +105,7 @@ toScintilla::toScintilla(QWidget *parent, const char *name)
     // end of search all occurrences
 
     connect(this, SIGNAL(linesChanged()), this, SLOT(slotLinesChanged()));
+    connect(this, SIGNAL(cursorPositionChanged(int, int)), this, SLOT(setCoordinates(int, int)));
 
     // sets default tab width
     super::setTabWidth(toConfigurationNewSingle::Instance().option(Editor::TabStopInt).toInt());
@@ -198,6 +193,10 @@ void toScintilla::slotLinesChanged()
     setMarginWidth(0, QString().fill('0', x));
 
 }
+void toScintilla::setCoordinates(int line, int column)
+{
+    toGlobalEventSingle::Instance().setCoordinates(line + 1, column + 1);
+}
 
 void toScintilla::setWordWrap(bool enable)
 {
@@ -266,41 +265,6 @@ bool toScintilla::event(QEvent *event)
         }
     }
     return QsciScintilla::event(event);
-}
-
-void toScintilla::print(const QString  &fname)
-{
-    QsciPrinter printer;
-
-    QPrintDialog dialog(&printer, this);
-    dialog.setMinMax(1, 1000);
-    dialog.setFromTo(1, 1000);
-
-    if (!fname.isEmpty())
-    {
-        QFileInfo info(fname);
-        dialog.setWindowTitle(tr("Print %1").arg(info.fileName()));
-        printer.setOutputFileName(info.path() +
-                                  QString("/") +
-                                  info.baseName() +
-                                  ".pdf");
-    }
-    else
-        dialog.setWindowTitle(tr("Print Document"));
-
-    // printRange() not handling this and not sure what to do about it
-//     if(hasSelectedText())
-//         dialog.addEnabledOption(QAbstractPrintDialog::PrintSelection);
-
-    if (!dialog.exec())
-        return;
-
-    printer.setCreator(tr(TOAPPNAME));
-
-    // they show up in the print
-    setMarginLineNumbers(0, false);
-    printer.printRange(this);
-    setMarginLineNumbers(0, true);
 }
 
 void toScintilla::copy()
@@ -445,8 +409,12 @@ void toScintilla::keyPressEvent(QKeyEvent *e)
         copy();
         e->accept();
         return;
+    } else if (Utils::toCheckKeyEvent(e, toEditMenuSingle::Instance().searchReplaceAct->shortcut())) {
+        toSearchReplaceDockletSingle::Instance().activate();
+        e->accept();
+        return;
     }
-    QsciScintilla::keyPressEvent(e);
+    super::keyPressEvent(e);
 }
 
 void toScintilla::findPosition(int index, int &line, int &col)
@@ -468,7 +436,7 @@ void toScintilla::findPosition(int index, int &line, int &col)
     return ;
 }
 
-void toScintilla::gotoPosition(int pos)
+void toScintilla::gotoPosition(long pos)
 {
     SendScintilla(QsciScintilla::SCI_GOTOPOS, pos);
 }
@@ -478,7 +446,7 @@ void toScintilla::gotoLine(int line)
     SendScintilla(QsciScintilla::SCI_GOTOLINE, line);
 }
 
-int toScintilla::positionAfter(int pos, int offset)
+long toScintilla::positionAfter(long pos, int offset)
 {
     // Allow for multi-byte characters.
     for (int i = 0; i < offset; i++)
@@ -486,7 +454,7 @@ int toScintilla::positionAfter(int pos, int offset)
     return pos;
 }
 
-void toScintilla::setSelection(int posFrom, int posTo)
+void toScintilla::setSelection(long posFrom, long posTo)
 {
     SendScintilla(SCI_SETSEL, posFrom, posTo);
 }
@@ -596,100 +564,142 @@ void toScintilla::setSelectionType(int aType)
 void toScintilla::focusInEvent (QFocusEvent *e)
 {
     TLOG(9, toDecorator, __HERE__) << this << std::endl;
-    QsciScintilla::focusInEvent(e);
+    super::focusInEvent(e);
     int curline, curcol;
     getCursorPosition (&curline, &curcol);
     toGlobalEventSingle::Instance().setCoordinates(curline + 1, curcol + 1);
-
-    emit gotFocus();
+    toEditWidget::gotFocus();
 }
 
 void toScintilla::focusOutEvent (QFocusEvent *e)
 {
     TLOG(9, toDecorator, __HERE__) << this << std::endl;
-    QsciScintilla::focusOutEvent(e);
-    emit lostFocus();
+    super::focusOutEvent(e);
+    toEditWidget::lostFocus();
 }
 
 void toScintilla::contextMenuEvent(QContextMenuEvent *e)
 {
-    QPointer<toScintilla> that = this;
-    QPointer<QMenu> popup = createPopupMenu( e->pos() );
-    if (!popup)
-        return;
+    // create menu
+    QMenu *popup = new QMenu(this);
 
+    // Handle parent widget's context menu fields
+    toContextMenuHandler::traverse(this, popup);
+
+    populateContextMenu(popup);
+
+    // Display and "run" the menu
     e->accept();
-
     popup->exec(e->globalPos());
     delete popup;
 }
 
-/**
- * This function is called to create a right mouse button popup menu
- * at the specified position. If you want to create a custom popup menu,
- * reimplement this function and return the created popup menu. Ownership
- * of the popup menu is transferred to the caller.
- */
-QMenu *toScintilla::createPopupMenu(const QPoint& pos)
+void toScintilla::populateContextMenu(QMenu *popup)
 {
-    Q_UNUSED(pos);
-
+    // Handle my own context menu fields
+    toEditMenu &editMenu = toEditMenuSingle::Instance();
+    editMenu.menuAboutToShow();
     const bool isEmptyDocument = (lines() == 0);
-
-    // create menu
-    QMenu   *popup = new QMenu(this);
-    QAction *action;
 
     if (!isReadOnly())
     {
-        action = popup->addAction(QIcon(QPixmap(undo_xpm)), tr("&Undo"), this, SLOT(undo()));
-        action->setShortcut(QKeySequence::Undo);
-        action->setEnabled(isUndoAvailable());
-
-        action = popup->addAction(QIcon(QPixmap(redo_xpm)), tr("&Redo"), this, SLOT(redo()));
-        action->setShortcut(QKeySequence::Redo);
-        action->setEnabled(isRedoAvailable());
+        popup->addAction(editMenu.undoAct);
+        popup->addAction(editMenu.redoAct);
 
         popup->addSeparator();
 
-        action = popup->addAction(QIcon(QPixmap(cut_xpm)), tr("Cu&t"), this, SLOT(cut()));
-        action->setShortcut(QKeySequence::Cut);
-        action->setToolTip(tr("Cut to clipboard"));
-        action->setEnabled(hasSelectedText());
+        popup->addAction(editMenu.cutAct);
+    }
 
-        action = popup->addAction(QIcon(QPixmap(copy_xpm)),
-                                  tr("&Copy"),
-                                  this,
-                                  SLOT(copy()));
-        action->setShortcut(QKeySequence::Copy);
-        action->setToolTip(tr("Copy to clipboard"));
-        action->setEnabled(hasSelectedText());
+    popup->addAction(editMenu.copyAct);
 
-        action = popup->addAction(QIcon(QPixmap(paste_xpm)),
-                                  tr("&Paste"),
-                                  this,
-                                  SLOT(paste()));
-        action->setShortcut(QKeySequence::Paste);
-        action->setToolTip(tr("Paste from clipboard"));
-        action->setEnabled(!QApplication::clipboard()->text(
-                               QClipboard::Clipboard).isEmpty());
-
-        action = popup->addAction(tr("Clear"),
-                                  parent(),
-                                  SLOT(clear()));
-        action->setToolTip(tr("Clear editor"));
-        action->setEnabled(!isEmptyDocument);
+    if (!isReadOnly())
+    {
+        popup->addAction(editMenu.pasteAct);
 
         popup->addSeparator();
     }
 
-    action = popup->addAction(tr("Select &All"),
-                              this,
-                              SLOT(selectAll()));
-    action->setShortcut(QKeySequence::SelectAll);
-    action->setEnabled(!isEmptyDocument);
+    popup->addAction(editMenu.selectAllAct);
+}
 
-    return popup;
+bool toScintilla::editOpen(const QString &file) { throw __QHERE__; };
+
+bool toScintilla::editSave(bool askfile)
+{
+    QString fn = Utils::toSaveFilename(QString::null, QString::null, this);
+    if (!fn.isEmpty() && Utils::toWriteFile(fn, text()))
+    {
+        setModified(false);
+        return true;
+    }
+    return false;
+};
+
+void toScintilla::editUndo(void)
+{
+    undo();
+};
+
+void toScintilla::editRedo(void)
+{
+    redo();
+};
+
+void toScintilla::editCut(void)
+{
+    cut();
+};
+
+void toScintilla::editCopy(void)
+{
+    copy();
+}
+
+void toScintilla::editPaste(void)
+{
+    paste();
+}
+
+void toScintilla::editSelectAll(void)
+{
+    selectAll(true);
+}
+
+void toScintilla::editReadAll(void) { throw __QHERE__; };
+
+QString toScintilla::editText()
+{
+    return text();
+}
+
+toEditWidget::FlagSetStruct toScintilla::flagSet()
+{
+    if (isReadOnly())
+    {
+        FlagSet.Save = true;
+        FlagSet.Copy = hasSelectedText();
+        FlagSet.Paste = false;
+        FlagSet.Search = true;
+        FlagSet.SelectAll = true;
+    }
+    else
+    {
+        FlagSet.Save = true;
+        FlagSet.Undo = isUndoAvailable();
+        FlagSet.Redo = isRedoAvailable();
+        FlagSet.Cut  = hasSelectedText();
+        FlagSet.Copy = hasSelectedText();
+        FlagSet.Paste = true;
+        FlagSet.Search = true;
+        FlagSet.SelectAll = true;
+    }
+    return FlagSet;
+}
+
+bool toScintilla::handleSearching(QString const& search, QString const& replace, Search::SearchFlags flags)
+{
+    return findText(search, replace, flags);
 }
 
 QString toScintilla::getSelectionAsHTML()
@@ -1566,7 +1576,7 @@ wchar_t toScintilla::getWCharAt(int pos)
 
 toScintilla::CharClassify::cc toScintilla::CharClass(char c)
 {
-	return m_charClasifier.GetClass(c);
+    return m_charClasifier.GetClass(c);
 }
 
 toScintilla::CharClassify toScintilla::m_charClasifier;

@@ -59,16 +59,22 @@ QVariant ToConfiguration::Oracle::defaultValue(int option) const
             return QVariant((bool)false);
         case SkipStorageExceptTablespaceBool:
             return QVariant((bool)false);
-        case IncludeParallelBool:
-            return QVariant((bool)true);
         case IncludePartitionBool:
             return QVariant((bool)true);
-        case IncludeCodeBool:
+        case SegmentAttrsBool:
             return QVariant((bool)true);
-        case IncludeHeaderBool:
+        case StorageBool:
             return QVariant((bool)true);
-        case IncludePromptBool:
+        case TablespaceBool:
             return QVariant((bool)true);
+        case ConstraintsBool:
+            return QVariant((bool)true);
+        case RefConstraintsBool:
+            return QVariant((bool)true);
+        case ConstraintsAsAlterBool:
+            return QVariant((bool)false);
+        case XPlanFormat:
+            return QVariant(QString("BASIC"));
         default:
             Q_ASSERT_X( false, qPrintable(__QHERE__), qPrintable(QString("Context Oracle un-registered enum value: %1").arg(option)));
             return QVariant();

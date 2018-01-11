@@ -32,8 +32,7 @@
  *
  * END_COMMON_COPYRIGHT_HEADER */
 
-#ifndef TOLINECHART_H
-#define TOLINECHART_H
+#pragma once
 
 #include <QWidget>
 #include <QtCore/QString>
@@ -93,10 +92,10 @@ class toLineChart : public QWidget
 
         static double round(double round, bool up);
         QRect fixRect(QPoint p1, QPoint p2);
-        virtual void mouseReleaseEvent(QMouseEvent *e);
-        virtual void mouseMoveEvent(QMouseEvent *e);
-        virtual void mouseDoubleClickEvent(QMouseEvent *e);
-        virtual void mousePressEvent(QMouseEvent *e);
+        void mouseReleaseEvent(QMouseEvent *e) override;
+        void mouseMoveEvent(QMouseEvent *e) override;
+        void mouseDoubleClickEvent(QMouseEvent *e) override;
+        void mousePressEvent(QMouseEvent *e) override;
 
         int countSamples(void);
         void clearZoom(void);
@@ -337,11 +336,9 @@ class toLineChart : public QWidget
             update();
         }
 
-#ifdef TORA3_CHART
         /** Open chart in new window.
          */
-        virtual toLineChart *openCopy(QWidget *parent);
-#endif
+        toLineChart *openCopy(QWidget *parent);
 
     signals:
         /** A new value set was added to the chart.
@@ -352,7 +349,7 @@ class toLineChart : public QWidget
     public slots:
         /** Clear the values from the chart.
          */
-        virtual void clear(void)
+        void clear(void)
         {
             Values.clear();
             XValues.clear();
@@ -363,19 +360,15 @@ class toLineChart : public QWidget
          */
         virtual void setup(void);
 
-        /** Print the chart.
-         */
-        virtual void editPrint(void);
-#ifdef TORA3_CHART
         void openCopy(void)
         {
             openCopy(NULL);
         }
-#endif
+
     protected:
         /** Reimplemented for internal reasons.
          */
-        virtual void paintEvent(QPaintEvent *e);
+        void paintEvent(QPaintEvent *e) override;
         /** Reimplemented for internal reasons.
          */
         virtual void addMenues(QMenu *)
@@ -385,4 +378,3 @@ class toLineChart : public QWidget
         void verticalChange(int);
 };
 
-#endif
