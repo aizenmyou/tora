@@ -41,7 +41,6 @@ License:                GPL
 BuildRoot:              %{_tmppath}/tora-root
 BuildRequires: postgresql-devel
 #BuildRequires: oracle-instantclient11.2-devel
-BuildRequires: perl
 BuildRequires: cmake >= 2.8.11
 BuildRequires: gcc-c++
 #Requires:      oracle-instantclient11.2-basic
@@ -107,7 +106,7 @@ export CXXFLAGS="$RPM_OPT_FLAGS"
 	%{_internal_loki} \
 	%{_qt5_build}  \
 	%{_build_type} \
-	-DUSE_PCH=ON   \
+	-DUSE_PCH=OFF  \
         -DCMAKE_INSTALL_PREFIX:PATH=%{_prefix} \
         .
 
